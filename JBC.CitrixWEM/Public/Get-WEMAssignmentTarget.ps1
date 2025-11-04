@@ -1,32 +1,33 @@
 function Get-WEMAssignmentTarget {
     <#
     .SYNOPSIS
-        Retrieves assignment targets (like AD objects) from a WEM Configuration Set.
+        Retrieves assignment targets (users/groups) from a WEM Configuration Set.
     .DESCRIPTION
-        This function queries and retrieves a list of assignment targets, such as users and groups,
-        from a specific WEM Configuration Set (Site).
+        This function gets a list of all configured assignment targets. It intelligently uses the correct
+        API method (GET for Cloud, POST for On-Premises). For On-Premises connections, it also
+        automatically resolves SIDs to their proper names.
     .PARAMETER SiteId
-        The ID of the WEM Configuration Set (Site) to query for assignment targets.
+        The ID of the WEM Configuration Set to query. Defaults to the active site.
     .EXAMPLE
-        PS C:\> Get-WEMAssignmentTarget -SiteId 1
+        PS C:\> # After setting the active site
+        PS C:\> Get-WEMAssignmentTarget
 
-        Retrieves all assignment targets associated with Site ID 1.
+        Retrieves all assignment targets from the active Configuration Set, regardless of environment.
     .NOTES
-        Version:        1.1
-        Author:         John Billekens Consultancy
-        Co-Author:      Gemini
-        Creation Date:  2025-08-05
+        Function  : Get-WEMAssignmentTarget
+        Author    : John Billekens Consultancy
+        Co-Author : Gemini
+        Copyright : Copyright (c) John Billekens Consultancy
+        Version   : 1.2
     #>
     [CmdletBinding()]
     [OutputType([PSCustomObject[]])]
     param(
         [Parameter(Mandatory = $false)]
-        [Alias("Id")]
         [int]$SiteId
     )
 
     try {
-        # Get connection details. Throws an error if not connected.
         $Connection = Get-WemApiConnection
 
         $ResolvedSiteId = 0
@@ -39,23 +40,61 @@ function Get-WEMAssignmentTarget {
             throw "No -SiteId was provided, and no active Configuration Set has been set. Please use Set-WEMActiveConfigurationSite or specify the -SiteId parameter."
         }
 
-        # Build the specific filter structure required by the API
-        $Filter = [PSCustomObject]@{
-            param    = "SiteId"
-            operator = "Equals"
-            value    = $ResolvedSiteId
+        $UriPath = ''
+        $Method = ''
+        $Body = $null
+
+        if ($Connection.IsOnPrem) {
+            $UriPath = "services/wem/cachedAdObject/assignmentTarget/`$query"
+            $Method = "POST"
+            $Body = @{
+                filters = @(
+                    @{
+                        param    = "SiteId"
+                        operator = "Equals"
+                        value    = $ResolvedSiteId
+                    }
+                )
+            }
+        } else {
+            $UriPath = "services/wem/assignmentTarget/`$query"
+            $Method = "POST"
+            $Body = @{
+                filters = @(
+                    @{
+                        param    = "SiteId"
+                        operator = "Equals"
+                        value    = $ResolvedSiteId
+                    }
+                )
+            }
         }
 
-        $Body = @{
-            filters = @($Filter)
+        $Result = Invoke-WemApiRequest -UriPath $UriPath -Method $Method -Connection $Connection -Body $Body
+        $InitialTargets = @($Result | Expand-WEMResult)
+
+        if ($Connection.IsOnPrem -and $InitialTargets.Count -gt 0) {
+            # --- On-Premises SID Resolution Logic ---
+            Write-Verbose "On-Premises connection detected. Resolving SIDs to names..."
+            $SidsToResolve = $InitialTargets.sid
+            $ResolvedObjects = Resolve-WEMSid -Sid $SidsToResolve
+
+            $ResolvedLookup = $ResolvedObjects | Group-Object -Property { $_.identity.sid } -AsHashTable -AsString
+
+            foreach ($Target in $InitialTargets) {
+                if ($ResolvedLookup.ContainsKey($Target.sid)) {
+                    $ResolvedData = $ResolvedLookup[$Target.sid]
+                    $Target.name = $ResolvedData.propertiesEx.accountName
+                    $Target.type = $ResolvedData.type
+                }
+            }
+            Write-Output $InitialTargets
+        } else {
+            # --- Cloud Logic (or empty On-Prem result) ---
+            Write-Output $InitialTargets
         }
-
-        $UriPath = "services/wem/assignmentTarget/`$query"
-
-        $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
-        Write-Output ($Result | Expand-WEMResult)
     } catch {
-        Write-Error "Failed to retrieve WEM Assignment Targets for Site ID $($ResolvedSiteId): $($_.Exception.Message)"
+        Write-Error "Failed to retrieve WEM Assignment Targets for Site ID '$($ResolvedSiteId)': $($_.Exception.Message)"
         return $null
     }
 }

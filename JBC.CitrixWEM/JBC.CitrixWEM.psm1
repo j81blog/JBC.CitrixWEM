@@ -81,22 +81,17 @@ Set-Variable -Name OnRemove -Value $OnRemove -Scope Script -Option AllScope
 
 #Hide Progress bar
 $Script:ProgressPreference = "SilentlyContinue"
-$messageData = [System.Management.Automation.HostInformationMessage]@{
-    Message         = $MessageData
-    ForegroundColor = $ForegroundColor
-    BackgroundColor = $BackgroundColor
-    NoNewline       = $NoNewline.IsPresent
-}
 
 if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
     $InformationPreference = "Continue"
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "`r`nConnect to your wem environment using the one of the following options:"; ForeGroundColor = "White" })
+    [ConsoleColor]$BackgroundColor = $Host.UI.RawUI.BackgroundColor
+    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "`r`nConnect to your wem environment using the one of the following options:"; ForeGroundColor = "White"; BackgroundColor = $BackgroundColor })
     Write-Information -MessageData "1. OnPrem: "
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "Connect-WEMApi -WEMServer `"<WEM Server FQDN>`" -Credential <Your WEM Credential>`n"; ForeGroundColor = "Cyan" })
+    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "Connect-WEMApi -WEMServer `"<https://YourWEMServer.fqdn>`" -Credential <Your WEM Credential>`n"; ForeGroundColor = "Cyan"; BackgroundColor = $BackgroundColor })
     Write-Information -MessageData "2. Citrix Cloud (Web Credentials): "
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "Connect-WEMApi [-CustomerId <CustomerID>]`n"; ForeGroundColor = "Cyan" })
+    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "Connect-WEMApi [-CustomerId <CustomerID>]`n"; ForeGroundColor = "Cyan"; BackgroundColor = $BackgroundColor })
     Write-Information -MessageData "3. Citrix Cloud (API Credentials): "
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "Connect-WEMApi -CustomerId <CustomerID> -ClientId <ClientID> -ClientSecret <Secret>`n`n"; ForeGroundColor = "Cyan" })
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "NOTE: To suppress this message in the future run: Set-WEMModuleConfiguration -ShowModuleInfo `$false"; ForeGroundColor = "Yellow" })
+    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "Connect-WEMApi -CustomerId <CustomerID> -ClientId <ClientID> -ClientSecret <Secret>`n`n"; ForeGroundColor = "Cyan"; BackgroundColor = $BackgroundColor })
+    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "NOTE: To suppress this message in the future run: Set-WEMModuleConfiguration -ShowModuleInfo `$false"; ForeGroundColor = "Yellow"; BackgroundColor = $BackgroundColor })
     $InformationPreference = "SilentlyContinue"
 }

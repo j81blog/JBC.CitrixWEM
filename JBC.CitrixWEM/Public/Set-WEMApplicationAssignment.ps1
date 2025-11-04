@@ -1,34 +1,25 @@
 function New-WEMApplicationAssignment {
     <#
     .SYNOPSIS
-        Assigns a WEM application action to a target.
+        Assigns a WEM application action to a target and configures its shortcuts.
     .DESCRIPTION
         This function creates a new assignment for a WEM application, linking a target (user/group),
-        a resource (the application), and an optional filter rule. If -SiteId is not specified, it uses
-        the active Configuration Set defined by Set-WEMActiveConfigurationSite.
+        a resource (the application), and an optional filter rule. It also allows for the initial
+        configuration of shortcut locations (Desktop, Start Menu, etc.).
     .PARAMETER Target
-        The assignment target object (e.g., from Get-WEMADGroup or Get-WEMADUser) to which the application will be assigned.
+        The assignment target object (from Get-WEMAssignmentTarget or Get-WEMADGroup) to which the application will be assigned.
     .PARAMETER Application
         The application action object (from Get-WEMApplication) that you want to assign.
-    .PARAMETER FilterRule
-        An optional filter rule object (from Get-WEMFilterRule) to apply to this assignment.
-        If not provided, the "Always True" filter is used by default.
-    .PARAMETER SiteId
-        The ID of the WEM Configuration Set. Defaults to the active site.
-    .PARAMETER PassThru
-        If specified, the command returns the newly created assignment object.
-    .EXAMPLE
-        PS C:\> $App = Get-WEMApplication -DisplayName "Notepad++"
-        PS C:\> $Group = Get-WEMADGroup -Filter "Developers"
-        PS C:\> New-WEMApplicationAssignment -Target $Group -Application $App -PassThru
-
-        Assigns the "Notepad++" application to the "Developers" group and returns the new assignment object.
+    .PARAMETER CreateDesktopShortcut
+        If specified, a shortcut for the application will be created on the desktop.
+    .PARAMETER PinToTaskbar
+        If specified, the application will be pinned to the taskbar.
     .NOTES
         Function  : New-WEMApplicationAssignment
         Author    : John Billekens Consultancy
         Co-Author : Gemini
         Copyright : Copyright (c) John Billekens Consultancy
-        Version   : 1.0
+        Version   : 1.2
     #>
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([PSCustomObject])]
@@ -49,22 +40,22 @@ function New-WEMApplicationAssignment {
         [switch]$PassThru,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$IsAutoStart,
+        [Switch]$AutoStart,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$IsPinToStartMenu,
+        [Switch]$PinToStartMenu,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$IsPinToTaskBar,
+        [Switch]$PinToTaskbar,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$IsDesktop,
+        [Switch]$CreateDesktopShortcut,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$IsQuickLaunch,
+        [Switch]$CreateQuickLaunchShortcut,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$IsStartMenu
+        [Switch]$CreateStartMenuShortcut
     )
 
     try {
@@ -94,24 +85,20 @@ function New-WEMApplicationAssignment {
 
         $TargetDescription = "Assign Application '$($Application.DisplayName)' (ID: $($Application.id)) to Target '$($Target.Name)' (ID: $($Target.id))"
         if ($PSCmdlet.ShouldProcess($TargetDescription, "Create Assignment")) {
+
+            # REFINED: Assign the boolean value of the switch's IsPresent property directly.
             $Body = @{
                 siteId           = $ResolvedSiteId
                 resourceId       = $Application.id
                 targetId         = $Target.id
                 filterId         = $ResolvedFilterId
-                isAutoStart      = $false
-                isDesktop        = $false
-                isQuickLaunch    = $false
-                isStartMenu      = $false
-                isPinToStartMenu = $false
-                isPinToTaskBar   = $false
+                isAutoStart      = $AutoStart.IsPresent
+                isDesktop        = $CreateDesktopShortcut.IsPresent
+                isQuickLaunch    = $CreateQuickLaunchShortcut.IsPresent
+                isStartMenu      = $CreateStartMenuShortcut.IsPresent
+                isPinToStartMenu = $PinToStartMenu.IsPresent
+                isPinToTaskBar   = $PinToTaskbar.IsPresent
             }
-            if ($IsAutoStart.IsPresent) { $Body.isAutoStart = $true }
-            if ($IsDesktop.IsPresent) { $Body.isDesktop = $true }
-            if ($IsQuickLaunch.IsPresent) { $Body.isQuickLaunch = $true }
-            if ($IsStartMenu.IsPresent) { $Body.isStartMenu = $true }
-            if ($IsPinToStartMenu.IsPresent) { $Body.isPinToStartMenu = $true }
-            if ($IsPinToTaskBar.IsPresent) { $Body.isPinToTaskBar = $true }
 
             $UriPath = "services/wem/applicationAssignment"
             $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body

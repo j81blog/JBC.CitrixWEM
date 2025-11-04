@@ -4,6 +4,7 @@ Param()
 $CmdLets = Get-ChildItem -Path "$PSScriptRoot\JBC.CitrixWEM\Public\*" -Filter *.ps1 | Select-Object -ExpandProperty BaseName | Sort-Object
 
 $DateTime = Get-Date
+$Hour = $DateTime.Hour
 if ($DateTime.Minute -le 15) {
     $Minutes = 15
 } elseif ($DateTime.Minute -le 30) {
@@ -12,8 +13,13 @@ if ($DateTime.Minute -le 15) {
     $Minutes = 45
 } else {
     $Minutes = 0
+    if ($Hour -lt 23) {
+        $Hour++
+    } else {
+        $Hour = 0
+    }
 }
-$NewVersion = '{0}{1:d2}' -f (Get-Date -Format "yyyy.Mdd.H"), $Minutes
+$NewVersion = '{0}{1:d2}{2:d2}' -f (Get-Date -Format "yyyy.Mdd."), $Hour, $Minutes
 
 Update-ModuleManifest -Path "$PSScriptRoot\JBC.CitrixWEM\JBC.CitrixWEM.psd1" `
     -ModuleVersion $NewVersion `

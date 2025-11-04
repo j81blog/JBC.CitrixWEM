@@ -74,7 +74,8 @@ function Connect-WEMApi {
         [Parameter(Mandatory = $false, ParameterSetName = 'ApiCredentials')]
         [Parameter(Mandatory = $false, ParameterSetName = 'Sdk')]
         [Parameter(Mandatory = $false, ParameterSetName = 'OnPremCredential')]
-        [switch]$NoWelcome,
+        [Alias('Quiet, Q')]
+        [switch]$Silent,
 
         [Parameter(Mandatory = $true, ParameterSetName = 'OnPremCredential')]
         [System.Management.Automation.PSCredential]
@@ -96,7 +97,7 @@ function Connect-WEMApi {
         if ($script:WemApiConnection) {
             Disconnect-WEMApi
         }
-
+        $IsConnected = $false
         if ($PSCmdlet.ParameterSetName -eq 'OnPremCredential') {
             # --- On-Premises Logic ---
             Write-Verbose "Attempting to connect to On-Premises WEM Server: $($WEMServer)"
@@ -130,7 +131,8 @@ function Connect-WEMApi {
             }
 
             $LocalConnection.BearerToken = "session $($LoginJson.SessionId)"
-            Write-Host "Successfully connected to On-Premises WEM Server: $($WEMServer.Host)"
+            Write-Verbose "Successfully connected to On-Premises WEM Server: $($WEMServer.Host)"
+            $IsConnected = $true
         } else {
             # --- Cloud Logic ---
             $LocalConnection.BaseUrl = "https://{0}-api-webconsole.wem.cloud.com" -f $ApiRegion
@@ -146,7 +148,7 @@ function Connect-WEMApi {
                 try {
                     if ($CustomerId) {
                         Write-Verbose "Attempting to find existing cached Citrix SDK session for Customer ID: $CustomerId."
-                        $ApiCredentials = Get-XDCredentials | Where-Object CustomerId -eq $CustomerId -ErrorAction Stop
+                        $ApiCredentials = Get-XDCredentials | Where-Object CustomerId -EQ $CustomerId -ErrorAction Stop
                     } else {
                         Write-Verbose "No Customer ID specified. Attempting to use any existing cached Citrix SDK session."
                         $ApiCredentials = Get-XDCredentials -ErrorAction Stop
@@ -171,7 +173,8 @@ function Connect-WEMApi {
                     $LocalConnection.CustomerId = "$($ApiCredentials.CustomerId)"
                     $LocalConnection.CloudProfile = $ApiCredentials.ProfileName
                 }
-                Write-Host "Successfully connected using Citrix SDK session for Customer ID: $($LocalConnection.CustomerId) in region $($ApiRegion.ToUpper())"
+                Write-Verbose "Successfully connected using Citrix SDK session for Customer ID: $($LocalConnection.CustomerId) in region $($ApiRegion.ToUpper())"
+                $IsConnected = $true
             } else {
                 # ApiCredentials
                 Write-Verbose "Attempting to connect using API Credentials."
@@ -194,14 +197,13 @@ function Connect-WEMApi {
                 }
 
                 $LocalConnection.BearerToken = "CWSAuth bearer=$($TokenResponse.token)"
-                if ($NoWelcome.ToBool() -eq $false) {
-                    Write-Information -MessageData "Successfully connected using API Credentials for Customer ID: $($LocalConnection.CustomerId) in region $($ApiRegion.ToUpper())" -InformationAction Continue
-                    Write-Information -MessageData "`nNOTE: You can use the -NoWelcome parameter to suppress this message." -InformationAction Continue
-                }
+                Write-Verbose "Successfully connected using API Credentials for Customer ID: $($LocalConnection.CustomerId) in region $($ApiRegion.ToUpper())"
+                $IsConnected = $true
             }
         }
 
         $script:WemApiConnection = $LocalConnection
+
         try {
             Set-WEMActiveDomain
         } catch {
@@ -212,5 +214,21 @@ function Connect-WEMApi {
     } catch {
         Write-Error "Failed to connect to WEM API. Details: $($_.Exception.Message)"
         throw
+    } finally {
+        if (-not $Silent -and -not $IsConnected) {
+            Write-Warning "Connection to WEM API was not established."
+        } elseif ($Silent.IsPresent -eq $false) {
+            Write-Output ([PSCustomObject]@{
+                    Message     = "Successfully connected to Citrix WEM Cloud API."
+                    CustomerId  = $LocalConnection.CustomerId
+                    ApiRegion   = $ApiRegion.ToUpper()
+                    IsOnPrem    = $LocalConnection.IsOnPrem
+                    IsCloud     = -not $LocalConnection.IsOnPrem
+                    IsConnected = $IsConnected
+                }
+            )
+        } else {
+            Write-Verbose "Silent mode enabled; suppressing connection success output."
+        }
     }
 }

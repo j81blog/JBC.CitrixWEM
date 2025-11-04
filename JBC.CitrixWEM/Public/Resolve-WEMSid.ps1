@@ -1,26 +1,27 @@
 function Resolve-WEMSid {
     <#
     .SYNOPSIS
-        Translates one or more SIDs to their corresponding names using the WEM service.
+        Resolves one or more SIDs to AD objects using the WEM service.
     .DESCRIPTION
-        This function takes an array of Security Identifiers (SIDs) and uses the On-Premises WEM API
-        to resolve them to their friendly names (e.g., user or group names).
-        This command is only applicable for On-Premises connections.
+        This function takes one or more SIDs and uses the WEM API to resolve them into full
+        AD object details, including the account name. It works for both Cloud and On-Premises connections,
+        processing SIDs in batches of 25 for stability.
     .PARAMETER Sid
-        An array of SID strings to be resolved. This parameter accepts input from the pipeline.
+        A single SID or an array of SIDs to resolve. This parameter accepts pipeline input.
     .EXAMPLE
-        PS C:\> Resolve-WEMSid -Sid "S-1-5-21-1111111111-222222222-333333333-44444"
+        PS C:\> Resolve-WEMSid -Sid "S-1-5-32-544"
 
-        Resolves the specified SID to its corresponding account name.
+        Resolves the well-known Administrators SID to its corresponding object details.
     .EXAMPLE
         PS C:\> "S-1-5-32-544", "S-1-5-32-545" | Resolve-WEMSid
 
         Resolves the SIDs for the local Administrators and Users groups via the pipeline.
     .NOTES
-        Version:        1.0
-        Author:         John Billekens Consultancy
-        Co-Author:      Gemini
-        Creation Date:  2025-08-11
+        Function  : Resolve-WEMSid
+        Author    : John Billekens Consultancy
+        Co-Author : Gemini
+        Copyright : Copyright (c) John Billekens Consultancy
+        Version   : 1.4
     #>
     [CmdletBinding()]
     [OutputType([PSCustomObject[]])]
@@ -29,31 +30,53 @@ function Resolve-WEMSid {
         [string[]]$Sid
     )
 
-    try {
-        # Get connection details. Throws an error if not connected.
-        $Connection = Get-WemApiConnection
+    begin {
+        $AllSids = [System.Collections.Generic.List[string]]::new()
+    }
 
-        # This command is only valid for On-Premises connections.
-        if (-not $Connection.IsOnPrem) {
-            throw "This command is only supported for On-Premises WEM deployments."
+    process {
+        $AllSids.AddRange($Sid)
+    }
+
+    end {
+        try {
+            $Connection = Get-WemApiConnection
+
+            if ($AllSids.Count -eq 0) {
+                return @()
+            }
+
+            $AllResolvedObjects = @()
+            $BatchSize = 25
+            $i = 0
+
+            while ($i -lt $AllSids.Count) {
+                $Batch = $AllSids.GetRange($i, [System.Math]::Min($BatchSize, $AllSids.Count - $i))
+                Write-Verbose "Resolving batch of $($Batch.Count) SIDs (starting at index $($i))..."
+
+                $Body = @{ sids = $Batch }
+
+                $UriPath = ''
+                if ($Connection.IsOnPrem) {
+                    $UriPath = "services/wem/onPrem/translator"
+                } else {
+                    $UriPath = "services/wem/forward/translator"
+                }
+
+                $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
+
+                $ResolvedBatch = ($Result | Expand-WEMResult) | Where-Object { $null -ne $_ }
+                if ($ResolvedBatch) {
+                    $AllResolvedObjects += $ResolvedBatch
+                }
+
+                $i += $BatchSize
+            }
+
+            Write-Output @($AllResolvedObjects)
+        } catch {
+            Write-Error "Failed to resolve WEM SIDs: $($_.Exception.Message)"
+            return $null
         }
-
-        $Body = @{
-            sids = $Sid
-        }
-
-        if ($Connection.IsOnPrem) {
-            $UriPath = "services/wem/onPrem/translator"
-        } else {
-            $UriPath = "/services/wem/forward/translator"
-        }
-
-        $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
-
-        # The API returns the results in an 'Items' property.
-        Write-Output ($Result | Expand-WEMResult)
-    } catch {
-        Write-Error "Failed to resolve SIDs: $($_.Exception.Message)"
-        return $null
     }
 }
