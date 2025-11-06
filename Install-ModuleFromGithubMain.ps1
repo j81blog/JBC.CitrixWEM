@@ -78,14 +78,10 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
     Copy-Item -Path "$($InstallPath)\$($ModuleName)-$($RemoteBranch)\$($ModuleName)" -Destination $InstallPath -Recurse -Force -ErrorAction Continue
     Remove-Item -Path "$($InstallPath)\$($ModuleName)-$($RemoteBranch)" -Recurse -Force
     Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
-    Import-Module -Name $ModuleName -Force
 } else {
     Write-Host "Running locally from $($PSScriptRoot)" -ForegroundColor Cyan
     Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Ignore
     Copy-Item -Path "$($PSScriptRoot)\$($ModuleName)" -Destination $InstallPath -Recurse -Force -ErrorAction Continue
     Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
-    Import-Module -Name $ModuleName -Force
 }
-Write-Host 'Module has been installed' -ForegroundColor Green
-
-Get-Command -Module $ModuleName | Format-Table -AutoSize
+Write-Host "Module has been installed, to import run `"Import-Module -Name $ModuleName -Force`"" -ForegroundColor Green
