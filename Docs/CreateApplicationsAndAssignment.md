@@ -33,26 +33,39 @@ Set-WEMActiveDomain
 ```
 
 ### 2. Define Key Variables
-The script defines two main variables: the name of the printer to be assigned and the name of the AD group that will receive the assignment.
+The following two variables will contain the necessary details to create and assign an application:
 
 ```powershell
-# The display name of the printer in WEM
-$Printername = "<printername>"
+# The Application parameters
+$ApplicationParams = @{
+    startMenuPath = "Start Menu\Programs"
+    appType       = "InstallerApplication"
+    state         = "Enabled"
+    iconStream    = $(Export-FileIcon -FilePath "C:\Program Files\7-Zip\7zFM.exe" -Size 32 -AsBase64)
+    parameter     = ""
+    description   = "7-Zip File Manager"
+    name          = "7-Zip"
+    commandLine   = "C:\Program Files\7-Zip\7zFM.exe"
+    workingDir    = "C:\Program Files\7-Zip"
+    displayName   = "7-Zip"
+    WindowStyle   = "Normal"
+    ActionType    = "CreateAppShortcut"
+}
 
 # The sAMAccountName of the Active Directory group
 $ADGroupName = "<AD Group Name>"
 ```
 
-### 3. Locate the Printer in WEM
-Before assigning the printer, the script confirms it exists in WEM. It retrieves all printers and filters the list to find the specific one by name. If the printer is not found, the script stops and throws an error.
+### 3. Locate the Application in WEM
+Before assigning the application, we must confirm it exists in WEM. It retrieves all applications and filters the list to find the specific one by name. If the application is not found, we must throw an error and stop the actions.
 
 ```powershell
-# Retrieve all printers and filter for the one matching $Printername
-$WEMPrinter = Get-WEMPrinter | Where-Object { $_.name -ieq $Printername }
+# Retrieve all applications and filter for the one matching $ApplicationParams.name
+$WEMApplication = Get-WEMApplication | Where-Object { $_.name -ieq $ApplicationParams.name }
 
-# If the printer object is not found, display an error and exit
-if (-not $WEMPrinter) {
-    Write-Error "Printer $Printername not found in WEM"
+# If the application object is not found, display an error and exit
+if (-not $WEMApplication.name) {
+    Write-Error "Application $($ApplicationParams.name) not found in WEM"
     return
 }
 ```
@@ -83,24 +96,24 @@ if (-not $WEMAssignmentTarget) {
 }
 ```
 
-### 5. Create the Printer Assignment
-With both the printer object ($WEMPrinter) and the assignment target object ($WEMAssignmentTarget) identified or created, the script creates the actual assignment, linking the two together.
+### 5. Create the Application Assignment
+With both the application object ($WEMApplication) and the assignment target object ($WEMAssignmentTarget) identified or created, we can create the actual assignment, linking the two together.
 
 ```powershell
 # Assign the printer to the target group
-$WEMPrinterAssignment = New-WEMPrinterAssignment -Target $WEMAssignmentTarget -Printer $WEMPrinter -PassThru
+$WEMApplicationAssignment = New-WEMApplicationAssignment -Target $WEMAssignmentTarget -Printer $WEMApplication -PassThru
 ```
 
 ### 6. (Optional) Remove the Assignment
-For completeness, the code includes the command to remove a printer assignment. In a real-world scenario, this would be used for de-provisioning, not immediately after creating an assignment. It demonstrates how to reverse the action using the assignment's unique ID.
+For completeness, the following includes the command to remove a printer assignment. In a real-world scenario, this would be used for de-provisioning, not immediately after creating an assignment. It demonstrates how to reverse the action using the assignment's unique ID.
 
 ```powershell
 # This command removes the assignment that was just created
-Remove-WEMPrinterAssignment -Id $WEMPrinterAssignment.id
+Remove-WEMApplicationAssignment -Id $WEMApplicationAssignment.id
 ```
 
 ### 9. Example
-This example extracts details from a user GPO and creates the network drives in WEM with the assignment.
+This example extracts details from a user GPO or Ivanti Workspace Control and creates the application(s) in WEM with the assignment.
 NOTE: This uses the "JBC.EUCMigrationTools" and "JBC.CitrixWEM" PowerShell Module
 
 ```PowerShell
