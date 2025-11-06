@@ -215,18 +215,23 @@ function Connect-WEMApi {
         Write-Error "Failed to connect to WEM API. Details: $($_.Exception.Message)"
         throw
     } finally {
-        if (-not $Silent -and -not $IsConnected) {
+        if (-not $IsConnected) {
             Write-Warning "Connection to WEM API was not established."
         } elseif ($Silent.IsPresent -eq $false) {
-            Write-Output ([PSCustomObject]@{
-                    Message     = "Successfully connected to Citrix WEM Cloud API."
-                    CustomerId  = $LocalConnection.CustomerId
-                    ApiRegion   = $ApiRegion.ToUpper()
-                    IsOnPrem    = $LocalConnection.IsOnPrem
-                    IsCloud     = -not $LocalConnection.IsOnPrem
-                    IsConnected = $IsConnected
-                }
-            )
+            $output = @{
+                Message     = "Successfully connected to Citrix WEM Cloud API."
+                IsOnPrem    = $LocalConnection.IsOnPrem
+                IsCloud     = -not $LocalConnection.IsOnPrem
+                IsConnected = $IsConnected
+            }
+            if ($LocalConnection.IsOnPrem) {
+                $output.Server = $WEMServer.Host
+            } else {
+                $output.ApiRegion = $ApiRegion.ToUpper()
+                $output.CustomerId = $LocalConnection.CustomerId
+            }
+
+            Write-Output ([PSCustomObject]$output)
         } else {
             Write-Verbose "Silent mode enabled; suppressing connection success output."
         }

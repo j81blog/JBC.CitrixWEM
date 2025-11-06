@@ -9,7 +9,7 @@ function New-WEMAssignmentTarget {
     .PARAMETER Sid
         The Security Identifier (SID) of the Active Directory user or group.
     .PARAMETER Name
-        The fully qualified name of the object (e.g., 'DOMAIN/Path/GroupName').
+        The name of the AD object <forest name>/<domain name>/<group name> (e.g., 'domain.local/domain.local/Domain Users').
     .PARAMETER SiteId
         The ID of the WEM Configuration Set where this target will be created.
     .PARAMETER ForestName
@@ -30,10 +30,10 @@ function New-WEMAssignmentTarget {
 
         First finds an AD group and then uses its properties to create a new assignment target in Site 19.
     .NOTES
-        Version:        1.1
+        Version:        1.2
         Author:         John Billekens Consultancy
         Co-Author:      Gemini
-        Creation Date:  2025-08-05
+        Creation Date:  2025-11-06
     #>
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([PSCustomObject])]
@@ -102,7 +102,6 @@ function New-WEMAssignmentTarget {
             $Body = @{
                 sid              = $Sid
                 type             = $Type
-                name             = $Name
                 description      = $Description
                 siteId           = $ResolvedSiteId
                 enabled          = $Enabled
@@ -110,7 +109,14 @@ function New-WEMAssignmentTarget {
                 directoryContext = $DirectoryContext
             }
 
-            $UriPath = "services/wem/assignmentTarget"
+            if ($Connection.IsOnPrem) {
+                $UriPath = "services/wem/users"
+            } else {
+                $UriPath = "services/wem/assignmentTarget"
+                $Body.name = $Name
+            }
+            Write-Verbose "Creating WEM Assignment Target '$($Name)' in Configuration Set ID '$($ResolvedSiteId)'..."
+            Write-Verbose "Request Body: $(ConvertTo-Json $Body -Depth 5)"
             $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
             if ($PassThru.IsPresent) {
                 $Result = Get-WEMAssignmentTarget -SiteId $ResolvedSiteId | Where-Object { $_.sid -eq $Sid }

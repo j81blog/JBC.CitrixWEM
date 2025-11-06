@@ -14,7 +14,7 @@ Import-Module "JBC.CitrixWEM" -Force
 
 # Authenticate and connect to the WEM Service or server
 # 1. OnPrem:
-Connect-WEMApi -WEMServer "<WEM Server FQDN>" -Credential <Your WEM Credential>
+Connect-WEMApi -WEMServer "https://<WEM Server FQDN>" -Credential <Your WEM Credential>
 
 # 2. Citrix Cloud (Web Credentials):
 Connect-WEMApi [-CustomerId <CustomerID>]
@@ -63,14 +63,23 @@ Before assigning the application, we must confirm it exists in WEM. It retrieves
 # Retrieve all applications and filter for the one matching $ApplicationParams.name
 $WEMApplication = Get-WEMApplication | Where-Object { $_.name -ieq $ApplicationParams.name }
 
-# If the application object is not found, display an error and exit
-if (-not $WEMApplication.name) {
-    Write-Error "Application $($ApplicationParams.name) not found in WEM"
+# If the application object is found, display an error and exit.
+if ($WEMApplication.name -ieq $ApplicationParams.name) {
+    Write-Error "Application $($ApplicationParams.name) already exists in WEM"
     return
 }
 ```
 
-### 4. Locate or Create the Assignment Target (AD Group)
+### 4. Create the application
+Now we are ready to create the application with the specifies parameters.
+I added the SelfHealing option separate, but you could also add it to the initial parameters.
+
+```PowerShell
+#Create a new application
+$WEMApplication = New-WEMApplication @ApplicationParams -SelfHealing $true -PassThru
+```
+
+### 5. Locate or Create the Assignment Target (AD Group)
 WEM assigns resources to "Assignment Targets," which can be users or groups. This section checks if the specified AD group already exists as an assignment target in WEM. If not, it finds the group in Active Directory and adds it to WEM.
 
 ```powershell
@@ -82,7 +91,7 @@ $Domain = Get-WEMADDomain -ForestName $Forest.forestName
 $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest.forestName, $Domain.domainName, $ADGroupName
 
 # Check if the group already exists as an assignment target in WEM
-$WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName }
+$WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $ADGroupName }
 
 # If the assignment target does not exist, it must be created
 if (-not $WEMAssignmentTarget) {
@@ -92,24 +101,32 @@ if (-not $WEMAssignmentTarget) {
 
     # Create a new assignment target in WEM using the AD group's properties
     # The -PassThru parameter outputs the newly created object to the pipeline
-    $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADGroup.Sid -Name $ADGroup.Name -ForestName $ADGroup.ForestName -DomainName $ADGroup.DomainName -Type $ADGroup.Type -PassThru
+    $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADGroup.Sid -Name $ADGroup.AccountName -ForestName $ADGroup.ForestName -DomainName $ADGroup.DomainName -Type $ADGroup.Type -PassThru
 }
 ```
 
-### 5. Create the Application Assignment
+### 6. Create the Application Assignment
 With both the application object ($WEMApplication) and the assignment target object ($WEMAssignmentTarget) identified or created, we can create the actual assignment, linking the two together.
 
 ```powershell
-# Assign the printer to the target group
-$WEMApplicationAssignment = New-WEMApplicationAssignment -Target $WEMAssignmentTarget -Printer $WEMApplication -PassThru
+# Assign the application to the target group, and add to the startmenu
+$WEMApplicationAssignment = New-WEMApplicationAssignment -Target $WEMAssignmentTarget -Application $WEMApplication -IsStartMenu -PassThru
 ```
 
-### 6. (Optional) Remove the Assignment
-For completeness, the following includes the command to remove a printer assignment. In a real-world scenario, this would be used for de-provisioning, not immediately after creating an assignment. It demonstrates how to reverse the action using the assignment's unique ID.
+### 7. (Optional) Remove the Assignment
+For completeness, the following includes the command to remove a application assignment. In a real-world scenario, this would be used for de-provisioning, not immediately after creating an assignment. It demonstrates how to reverse the action using the assignment's unique ID.
 
 ```powershell
 # This command removes the assignment that was just created
 Remove-WEMApplicationAssignment -Id $WEMApplicationAssignment.id
+```
+
+### 8. (Optional) Remove the Application
+For completeness, the following includes the command to remove a application. In a real-world scenario, this would be used for de-provisioning, not immediately after creating an application. It demonstrates how to reverse the action using the applications's unique ID.
+
+```powershell
+# This command removes the assignment that was just created
+Remove-WEMApplication -Id $WEMApplication.id
 ```
 
 ### 9. Example
@@ -148,7 +165,7 @@ $CustomerID = "abc12d3efghi"
 Connect-WEMApi -CustomerId $CustomerID
 
 #OnPrem: Specify the Server fqdn and Credentials
-$WEMServer = "citrixwem.domain.local"
+$WEMServer = "https://citrixwem.domain.local"
 $WEMCredential = Get-Credential
 Connect-WEMApi -WEMServer $WEMServer -Credential $WEMCredential
 
@@ -170,14 +187,10 @@ foreach ( $Application in $Applications ) {
     $Params = $Application.WEMApplicationParams | ConvertTo-Hashtable
     $Forest = (Get-WEMActiveDomain).Forest
     $Domain = (Get-WEMActiveDomain).Domain
-    if (-not ($Application.Enabled -eq $true)) {
-        Write-Host "Skipping Application, Application entry `"$($Application.Name)`" is not enabled" -ForegroundColor Yellow
-        continue
-    }
-    if ($Application.CreateShortcut -ne $true) {
-        Write-Host "Skipping Application, entry `"$($Application.Name)`" is not set to create shortcut" -ForegroundColor Yellow
-        continue
-    }
+    #if (-not ($Application.Enabled -eq $true)) {
+    #    Write-Host "Skipping Application, Application entry `"$($Application.Name)`" is not enabled" -ForegroundColor Yellow
+    #    continue
+    #}
 
     if (-not $Forest -or -not $Domain) {
         Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
@@ -187,6 +200,7 @@ foreach ( $Application in $Applications ) {
         Write-Verbose "Creating new WEM application $($Application.Name)"
         try {
             $WEMApplication = New-WEMApplication @Params -SelfHealing $true -PassThru
+            Write-Host "Succesfully created the application `"$($Application.Name)`"" -ForegroundColor Green
         } catch {
             Write-Host "Error creating WEM application $($Application.Name), Error $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
@@ -202,42 +216,54 @@ foreach ( $Application in $Applications ) {
             Write-Host "WEM application $($WEMApplication.Name) with path $($WEMApplication.TargetPath) created successfully." -ForegroundColor Green
         }
 
-        foreach ($GroupDetails in $Application.Assignments) {
-            $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $Domain, $GroupDetails.Name
-
-            # Check if the group already exists as an assignment target in WEM
-            $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.sid -ieq $GroupDetails.Sid }
+        foreach ($WEMAssignment in $Application.WEMAssignments) {
+            if ($WEMAssignment.Name -like "*\*") {
+                $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
+            } else {
+                $ADObjectName = $WEMAssignment.Name
+            }
+            $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $Domain, $ADObjectName
+            $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
             if (-not $WEMAssignmentTarget) {
-                # Find the group in Active Directory using the WEM cmdlets
+                # Find the group or user in Active Directory using the WEM cmdlets
                 # The Where-Object ensures an exact match on the account name
-                $ADGroup = Get-WEMADGroup -Filter $GroupDetails.Name -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $GroupDetails.Name -or $_.Name -like "*/*/$($GroupDetails.Name)" }
-                if ([String]::IsNullOrEmpty($ADGroup)) {
-                    <# There seems to be a bug with log group names#>
-                    $MaxLength = "$($GroupDetails.Name)".Length
-                    if ($MaxLength -gt 23) {
-                        $MaxLength = 23
+                if ($WEMAssignment.Type -ieq "user") {
+                    $ADObject = Get-WEMADUser -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                    if ([String]::IsNullOrEmpty($ADObject)) {
+                        Write-Host "Could not find user with name `"$($ADObjectName)`""
+                        Write-Warning "Known issue, we are looking at this issue"
+                        continue
                     }
-                    $ADGroupAlternativeSearch = "$($GroupDetails.Name)".Substring(0,$MaxLength)
-                    $ADGroup = Get-WEMADGroup -Filter $ADGroupAlternativeSearch | Where-Object { $_.AccountName -ieq $GroupDetails.Name -or $_.Name -like "*/*/$($GroupDetails.Name)" }
-                }
-                if ([String]::IsNullOrEmpty($ADGroup)) {
-                    Write-Host "Could not find group with name `"$($GroupDetails.Name)`""
-                    Continue
+                } else {
+                    $ADObject = Get-WEMADGroup -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                    if ([String]::IsNullOrEmpty($ADObject)) {
+                        <# There seems to be a bug with log group names#>
+                        $MaxLength = "$($ADObjectName)".Length
+                        if ($MaxLength -gt 23) {
+                            $MaxLength = 23
+                        }
+                        $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
+                        $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                    }
+                    if ([String]::IsNullOrEmpty($ADObject)) {
+                        Write-Host "Could not find group with name `"$($ADObjectName)`""
+                        continue
+                    }
                 }
                 # Create a new assignment target in WEM using the AD group's properties
                 # The -PassThru parameter outputs the newly created object to the pipeline
-                $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADGroup.Sid -Name $ADGroup.Name -ForestName $ADGroup.ForestName -DomainName $ADGroup.DomainName -Type $ADGroup.Type -PassThru
-                Write-Host "Created new WEM assignment target for AD group $($ADGroup.Name)"
+                $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
+                Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
             } else {
-                Write-Host "Found existing WEM assignment target for AD group $($GroupDetails.Name)"
+                Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
             }
             # Assign the application to the target group
             $WEMAssignmentParams = $Application.WEMAssignmentParams | ConvertTo-Hashtable
             $WEMApplicationAssignment = New-WEMApplicationAssignment -Target $WEMAssignmentTarget -Application $WEMApplication -PassThru @WEMAssignmentParams
             if ($WEMApplicationAssignment) {
-                Write-Host "Successfully created WEM application assignment for $($GroupDetails.Name)" -ForegroundColor Green
+                Write-Host "Successfully created WEM application assignment for $($WEMAssignment.Name)" -ForegroundColor Green
             } else {
-                Write-Error "Failed to create WEM application assignment for $($GroupDetails.Name)"
+                Write-Error "Failed to create WEM application assignment for $($WEMAssignment.Name)"
             }
         }
         $Application | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force

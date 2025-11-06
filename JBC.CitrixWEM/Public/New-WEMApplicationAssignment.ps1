@@ -1,11 +1,13 @@
 function New-WEMApplicationAssignment {
     <#
     .SYNOPSIS
-        Assigns a WEM application action to a target.
+        Creates a new WEM application assignment to a target with optional placement settings.
     .DESCRIPTION
         This function creates a new assignment for a WEM application, linking a target (user/group),
-        a resource (the application), and an optional filter rule. If -SiteId is not specified, it uses
-        the active Configuration Set defined by Set-WEMActiveConfigurationSite.
+        a resource (the application), and an optional filter rule. You can also specify where the
+        application shortcut should be placed (Desktop, Start Menu, Taskbar, etc.) and whether it
+        should auto-start. If -SiteId is not specified, it uses the active Configuration Set
+        defined by Set-WEMActiveConfigurationSite.
     .PARAMETER Target
         The assignment target object (e.g., from Get-WEMADGroup or Get-WEMADUser) to which the application will be assigned.
     .PARAMETER Application
@@ -17,12 +19,30 @@ function New-WEMApplicationAssignment {
         The ID of the WEM Configuration Set. Defaults to the active site.
     .PARAMETER PassThru
         If specified, the command returns the newly created assignment object.
+    .PARAMETER IsAutoStart
+        If specified, the application will automatically start when the user logs on.
+    .PARAMETER IsPinToStartMenu
+        If specified, the application shortcut will be pinned to the Start Menu.
+    .PARAMETER IsPinToTaskBar
+        If specified, the application shortcut will be pinned to the Taskbar.
+    .PARAMETER IsDesktop
+        If specified, the application shortcut will be placed on the Desktop.
+    .PARAMETER IsQuickLaunch
+        If specified, the application shortcut will be placed in the Quick Launch area.
+    .PARAMETER IsStartMenu
+        If specified, the application shortcut will be placed in the Start Menu.
     .EXAMPLE
         PS C:\> $App = Get-WEMApplication -DisplayName "Notepad++"
         PS C:\> $Group = Get-WEMADGroup -Filter "Developers"
         PS C:\> New-WEMApplicationAssignment -Target $Group -Application $App -PassThru
 
         Assigns the "Notepad++" application to the "Developers" group and returns the new assignment object.
+    .EXAMPLE
+        PS C:\> $App = Get-WEMApplication -DisplayName "Chrome"
+        PS C:\> $Users = Get-WEMADGroup -Filter "All Users"
+        PS C:\> New-WEMApplicationAssignment -Target $Users -Application $App -IsDesktop -IsPinToTaskBar
+
+        Assigns Chrome to all users with shortcuts on the Desktop and pinned to the Taskbar.
     .NOTES
         Function  : New-WEMApplicationAssignment
         Author    : John Billekens Consultancy

@@ -1,117 +1,152 @@
-function New-WEMApplicationAssignment {
+function Set-WEMApplicationAssignment {
     <#
     .SYNOPSIS
-        Assigns a WEM application action to a target and configures its shortcuts.
+        Updates an existing WEM application assignment's placement settings.
     .DESCRIPTION
-        This function creates a new assignment for a WEM application, linking a target (user/group),
-        a resource (the application), and an optional filter rule. It also allows for the initial
-        configuration of shortcut locations (Desktop, Start Menu, etc.).
-    .PARAMETER Target
-        The assignment target object (from Get-WEMAssignmentTarget or Get-WEMADGroup) to which the application will be assigned.
-    .PARAMETER Application
-        The application action object (from Get-WEMApplication) that you want to assign.
-    .PARAMETER CreateDesktopShortcut
-        If specified, a shortcut for the application will be created on the desktop.
-    .PARAMETER PinToTaskbar
-        If specified, the application will be pinned to the taskbar.
+        This function updates the placement settings of an existing WEM application assignment,
+        including where shortcuts should appear (Desktop, Start Menu, Taskbar, etc.) and whether
+        the application should auto-start. You can specify the assignment by ID or pass an
+        assignment object from Get-WEMApplicationAssignment via the pipeline.
+    .PARAMETER Id
+        The unique ID of the application assignment to update.
+    .PARAMETER InputObject
+        An application assignment object (from Get-WEMApplicationAssignment) to be modified.
+        Can be passed via the pipeline.
+    .PARAMETER IsAutoStart
+        If specified, the application will automatically start when the user logs on.
+    .PARAMETER IsPinToStartMenu
+        If specified, the application shortcut will be pinned to the Start Menu.
+    .PARAMETER IsPinToTaskBar
+        If specified, the application shortcut will be pinned to the Taskbar.
+    .PARAMETER IsDesktop
+        If specified, the application shortcut will be placed on the Desktop.
+    .PARAMETER IsQuickLaunch
+        If specified, the application shortcut will be placed in the Quick Launch area.
+    .PARAMETER IsStartMenu
+        If specified, the application shortcut will be placed in the Start Menu.
+    .PARAMETER PassThru
+        If specified, the command returns the updated assignment object.
+    .EXAMPLE
+        PS C:\> Set-WEMApplicationAssignment -Id 248 -IsDesktop -IsPinToTaskBar
+
+        Updates assignment 248 to place shortcuts on the Desktop and pin to the Taskbar.
+    .EXAMPLE
+        PS C:\> Get-WEMApplicationAssignment -SiteId 3 | Where-Object { $_.resourceId -eq 698 } | Set-WEMApplicationAssignment -IsAutoStart -PassThru
+
+        Finds the assignment for application 698 and sets it to auto-start, returning the updated object.
+    .EXAMPLE
+        PS C:\> Set-WEMApplicationAssignment -Id 248 -IsDesktop:$false -IsStartMenu:$false
+
+        Explicitly removes Desktop and Start Menu shortcuts from assignment 248.
     .NOTES
-        Function  : New-WEMApplicationAssignment
-        Author    : John Billekens Consultancy
-        Co-Author : Gemini
-        Copyright : Copyright (c) John Billekens Consultancy
-        Version   : 1.2
+        Version:        1.0
+        Author:         John Billekens Consultancy
+        Co-Author:      Claude
+        Creation Date:  2025-11-06
     #>
-    [CmdletBinding(SupportsShouldProcess = $true)]
+    [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'ById')]
     [OutputType([PSCustomObject])]
     param(
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-        [PSCustomObject]$Target,
+        [Parameter(Mandatory = $true, ParameterSetName = 'ById')]
+        [int]$Id,
 
-        [Parameter(Mandatory = $true)]
-        [PSCustomObject]$Application,
-
-        [Parameter(Mandatory = $false)]
-        [PSCustomObject]$FilterRule,
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByInputObject', ValueFromPipeline = $true)]
+        [PSCustomObject]$InputObject,
 
         [Parameter(Mandatory = $false)]
-        [int]$SiteId,
+        [bool]$IsAutoStart,
 
         [Parameter(Mandatory = $false)]
-        [switch]$PassThru,
+        [bool]$IsPinToStartMenu,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$AutoStart,
+        [bool]$IsPinToTaskBar,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$PinToStartMenu,
+        [bool]$IsDesktop,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$PinToTaskbar,
+        [bool]$IsQuickLaunch,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$CreateDesktopShortcut,
+        [bool]$IsStartMenu,
 
         [Parameter(Mandatory = $false)]
-        [Switch]$CreateQuickLaunchShortcut,
-
-        [Parameter(Mandatory = $false)]
-        [Switch]$CreateStartMenuShortcut
+        [switch]$PassThru
     )
 
     try {
         $Connection = Get-WemApiConnection
 
-        $ResolvedSiteId = 0
-        if ($PSBoundParameters.ContainsKey('SiteId')) {
-            $ResolvedSiteId = $SiteId
-        } elseif ($Connection.ActiveSiteId) {
-            $ResolvedSiteId = $Connection.ActiveSiteId
-            Write-Verbose "Using active Configuration Set '$($Connection.ActiveSiteName)' (ID: $ResolvedSiteId)"
-        } else {
-            throw "No -SiteId was provided, and no active Configuration Set has been set. Please use Set-WEMActiveConfigurationSite or specify the -SiteId parameter."
+        # Determine the assignment ID and retrieve the current assignment
+        $AssignmentId = if ($PSCmdlet.ParameterSetName -eq 'ById') { $Id } else { $InputObject.id }
+
+        if (-not $AssignmentId) {
+            throw "Could not determine assignment ID. Ensure the InputObject has an 'id' property."
         }
 
-        if (-not $Target.PSObject.Properties['id']) { throw "The provided -Target object does not have an 'id' property." }
-        if (-not $Application.PSObject.Properties['id']) { throw "The provided -Application object does not have an 'id' property." }
+        Write-Verbose "Retrieving current assignment with ID $AssignmentId..."
 
-        $ResolvedFilterId = 1 # Default to "Always True"
-        if ($PSBoundParameters.ContainsKey('FilterRule')) {
-            if (-not $FilterRule.PSObject.Properties['id']) { throw "The provided -FilterRule object does not have an 'id' property." }
-            $ResolvedFilterId = $FilterRule.id
-            Write-Verbose "Using specified filter rule '$($FilterRule.Name)' (ID: $ResolvedFilterId)"
+        # Get the current assignment to preserve all properties
+        $CurrentAssignment = if ($PSCmdlet.ParameterSetName -eq 'ByInputObject' -and $InputObject) {
+            $InputObject
         } else {
-            Write-Verbose "No filter rule specified, using default 'Always True' (ID: 1)."
-        }
-
-        $TargetDescription = "Assign Application '$($Application.DisplayName)' (ID: $($Application.id)) to Target '$($Target.Name)' (ID: $($Target.id))"
-        if ($PSCmdlet.ShouldProcess($TargetDescription, "Create Assignment")) {
-
-            # REFINED: Assign the boolean value of the switch's IsPresent property directly.
-            $Body = @{
-                siteId           = $ResolvedSiteId
-                resourceId       = $Application.id
-                targetId         = $Target.id
-                filterId         = $ResolvedFilterId
-                isAutoStart      = $AutoStart.IsPresent
-                isDesktop        = $CreateDesktopShortcut.IsPresent
-                isQuickLaunch    = $CreateQuickLaunchShortcut.IsPresent
-                isStartMenu      = $CreateStartMenuShortcut.IsPresent
-                isPinToStartMenu = $PinToStartMenu.IsPresent
-                isPinToTaskBar   = $PinToTaskbar.IsPresent
+            # Need to find the assignment - we'll need to check all sites or use the active site
+            $Connection = Get-WemApiConnection
+            $SiteId = if ($Connection.ActiveSiteId) {
+                $Connection.ActiveSiteId
+            } else {
+                throw "No active Configuration Set has been set. Please use Set-WEMActiveConfigurationSite first."
             }
 
+            $AllAssignments = Get-WEMApplicationAssignment -SiteId $SiteId
+            $Assignment = $AllAssignments | Where-Object { $_.id -eq $AssignmentId }
+
+            if (-not $Assignment) {
+                throw "Could not find application assignment with ID $AssignmentId in site $SiteId."
+            }
+            $Assignment
+        }
+
+        # Build the body with all required fields from the current assignment
+        $Body = @{
+            id                  = $CurrentAssignment.id
+            siteId              = $CurrentAssignment.siteId
+            resourceId          = $CurrentAssignment.resourceId
+            targetId            = $CurrentAssignment.targetId
+            filterId            = $CurrentAssignment.filterId
+            isAutoStart         = if ($PSBoundParameters.ContainsKey('IsAutoStart')) { $IsAutoStart } else { [bool]$CurrentAssignment.isAutoStart }
+            isDesktop           = if ($PSBoundParameters.ContainsKey('IsDesktop')) { $IsDesktop } else { [bool]$CurrentAssignment.isDesktop }
+            isQuickLaunch       = if ($PSBoundParameters.ContainsKey('IsQuickLaunch')) { $IsQuickLaunch } else { [bool]$CurrentAssignment.isQuickLaunch }
+            isStartMenu         = if ($PSBoundParameters.ContainsKey('IsStartMenu')) { $IsStartMenu } else { [bool]$CurrentAssignment.isStartMenu }
+            isPinToStartMenu    = if ($PSBoundParameters.ContainsKey('IsPinToStartMenu')) { $IsPinToStartMenu } else { [bool]$CurrentAssignment.isPinToStartMenu }
+            isPinToTaskBar      = if ($PSBoundParameters.ContainsKey('IsPinToTaskBar')) { $IsPinToTaskBar } else { [bool]$CurrentAssignment.isPinToTaskBar }
+        }
+
+        # Include groupingInfo if it exists
+        if ($CurrentAssignment.PSObject.Properties['groupingInfo']) {
+            $Body.groupingInfo = $CurrentAssignment.groupingInfo
+        }
+        if ($CurrentAssignment.PSObject.Properties['lastModifiedByActionGroup']) {
+            $Body.lastModifiedByActionGroup = $CurrentAssignment.lastModifiedByActionGroup
+        }
+
+        $TargetDescription = "Application Assignment ID $AssignmentId"
+        if ($PSCmdlet.ShouldProcess($TargetDescription, "Update Assignment")) {
             $UriPath = "services/wem/applicationAssignment"
-            $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
+            $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "PUT" -Connection $Connection -Body $Body
+            Write-Verbose "Application assignment $AssignmentId updated successfully."
 
             if ($PassThru.IsPresent) {
-                Write-Verbose "PassThru specified, retrieving newly created assignment..."
-                $Result = Get-WEMApplicationAssignment -SiteId $ResolvedSiteId | Where-Object { $_.resourceId -eq $Application.id -and $_.targetId -eq $Target.id -and $_.filterId -eq $ResolvedFilterId }
+                Write-Verbose "PassThru specified, retrieving updated assignment..."
+                $UpdatedAssignment = Get-WEMApplicationAssignment -SiteId $Body.siteId | Where-Object { $_.id -eq $AssignmentId }
+                Write-Output $UpdatedAssignment
+            } else {
+                Write-Output ($Result | Expand-WEMResult)
             }
-
-            Write-Output ($Result | Expand-WEMResult)
         }
     } catch {
-        Write-Error "Failed to create WEM Application Assignment: $($_.Exception.Message)"
+        Write-Error "Failed to update WEM Application Assignment: $($_.Exception.Message)"
         return $null
     }
 }
