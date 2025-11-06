@@ -12,7 +12,7 @@
 RootModule = 'JBC.CitrixWEM.psm1'
 
 # Version number of this module.
-ModuleVersion = '2025.1107.30'
+ModuleVersion = '2025.1107.45'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
