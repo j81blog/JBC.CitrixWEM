@@ -1,137 +1,163 @@
 function Set-WEMApplication {
     <#
     .SYNOPSIS
-        Updates an existing application action in a WEM Configuration Set.
+        Updates an existing WEM application action.
     .DESCRIPTION
-        This function updates the properties of an existing application action. You can provide the ID
-        and properties directly as parameters, or pipe application objects from Get-WEMApplication to
-        extract the Id automatically. Only explicitly specified parameters will be updated - no properties
-        are extracted from piped objects except for the Id. If -SiteId is not specified, it uses the
-        active Configuration Set defined by Set-WEMActiveConfigurationSite.
-    .PARAMETER InputObject
-        An application object (from Get-WEMApplication) or any object with an Id property.
-        Only the Id will be extracted from this object - all other changes must be specified explicitly.
+        This function updates the properties of an existing application action. It retrieves the
+        current configuration, applies the specified changes, and submits the full object back to the API.
     .PARAMETER Id
-        The unique ID of the application action to update. Can be provided directly or extracted from InputObject.
-    .PARAMETER SiteId
-        The ID of the WEM Configuration Set where the application exists. Defaults to the active site.
-    .PARAMETER IconStream
-        A base64-encoded string of the icon to be used for the shortcut.
+        The unique ID of the application action to update.
+    .PARAMETER InputObject
+        An application object (from Get-WEMApplication) to be modified. Can be passed via the pipeline.
+    .PARAMETER DisplayName
+        The new display name for the application.
+    .PARAMETER CommandLine
+        The new command line path for the application executable.
+    .PARAMETER Parameter
+        The new command line parameters for the application.
+    .PARAMETER StartMenuPath
+        The new Start Menu path for the application shortcut.
+    .PARAMETER WorkingDirectory
+        The new working directory for the application.
+    .PARAMETER State
+        The new state for the application (Enabled or Disabled).
+    .PARAMETER SelfHealing
+        Enable or disable self-healing for the application.
+    .PARAMETER WindowStyle
+        The new window style for the application (Normal, Minimized, or Maximized).
+    .PARAMETER Name
+        The new internal name for the application.
+    .PARAMETER Description
+        The new description for the application.
     .PARAMETER IconFile
         A path to an icon file. The file will be automatically converted to a base64 string.
+    .PARAMETER IconStream
+        A base64-encoded string of the icon to be used for the application.
+    .PARAMETER PassThru
+        If specified, the command returns the updated application object.
     .EXAMPLE
-        PS C:\> Set-WEMApplication -Id 459 -IconFile "C:\icons\new_icon.ico"
+        PS C:\> Get-WEMApplication -Name "Old App" | Set-WEMApplication -DisplayName "New App Name" -PassThru
 
-        Updates the icon for the application with ID 459 using a local file.
+        Finds the application "Old App", renames it, and returns the modified object.
     .EXAMPLE
-        PS C:\> Get-WEMApplication | Where-Object {$_.Name -like "*Office*"} | Set-WEMApplication -State "Disabled"
+        PS C:\> Set-WEMApplication -Id 459 -State "Disabled"
 
-        Gets all applications with "Office" in the name and disables them via pipeline.
+        Disables the application action with ID 459.
     .EXAMPLE
-        PS C:\> Get-WEMApplication -Id 459 | Set-WEMApplication -DisplayName "New Display Name"
+        PS C:\> Get-WEMApplication -Id 459 | Set-WEMApplication -IconFile "C:\icons\new_icon.ico"
 
-        Uses pipeline to get the application Id and explicitly sets a new DisplayName.
+        Updates the icon for application 459 using a local file.
     .NOTES
-        Version:        1.2
-        Author:         John Billekens Consultancy
-        Co-Author:      Gemini
-        Creation Date:  2025-08-12
+        Function  : Set-WEMApplication
+        Author    : John Billekens Consultancy
+        Co-Author : Claude Code
+        Copyright : Copyright (c) John Billekens Consultancy
+        Version   : 2.0
+        Date      : 2025-11-04
     #>
-    [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'Stream')]
+    [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'ById')]
+    [OutputType([PSCustomObject])]
     param(
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
-        [object]$InputObject,
-
-        [Parameter(ValueFromPipelineByPropertyName = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'ById')]
         [int]$Id,
 
-        [int]$SiteId,
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByInputObject', ValueFromPipeline = $true)]
+        [PSCustomObject]$InputObject,
 
-        [Parameter(ParameterSetName = 'Stream', ValueFromPipelineByPropertyName = $true)]
-        [string]$IconStream,
+        # Add all other modifiable properties as optional parameters
+        [Parameter(Mandatory = $false)]
+        [string]$Name,
 
-        [Parameter(ParameterSetName = 'File')]
-        [string]$IconFile,
-
+        [Parameter(Mandatory = $false)]
         [string]$DisplayName,
 
+        [Parameter(Mandatory = $false)]
         [string]$CommandLine,
 
-        [string]$StartMenuPath,
-
+        [Parameter(Mandatory = $false)]
         [string]$Parameter,
 
+        [Parameter(Mandatory = $false)]
+        [string]$StartMenuPath,
+
+        [Parameter(Mandatory = $false)]
         [string]$WorkingDirectory,
 
+        [Parameter(Mandatory = $false)]
         [ValidateSet("Enabled", "Disabled")]
         [string]$State,
 
+        [Parameter(Mandatory = $false)]
         [bool]$SelfHealing,
 
+        [Parameter(Mandatory = $false)]
         [ValidateSet("Normal", "Minimized", "Maximized")]
         [string]$WindowStyle,
 
-        [string]$Name,
+        [Parameter(Mandatory = $false)]
+        [string]$Description,
 
-        [string]$Description
+        [Parameter(Mandatory = $false, ParameterSetName = 'ById')]
+        [Parameter(Mandatory = $false, ParameterSetName = 'ByInputObject')]
+        [string]$IconFile,
+
+        [Parameter(Mandatory = $false)]
+        [string]$IconStream,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$PassThru
     )
 
     process {
         try {
-            # Handle InputObject - only extract the Id if not explicitly provided
-            if ($InputObject -and -not $PSBoundParameters.ContainsKey('Id')) {
-                # If InputObject is provided and no explicit Id, try to get Id from InputObject
-                if ($InputObject.Id) { $Id = $InputObject.Id }
-                elseif ($InputObject.id) { $Id = $InputObject.id }
-                else { throw "InputObject must have an 'Id' or 'id' property" }
-            }
-
             $Connection = Get-WemApiConnection
 
-            $ResolvedSiteId = 0
-            if ($PSBoundParameters.ContainsKey('SiteId')) {
-                $ResolvedSiteId = $SiteId
-            } elseif ($Connection.ActiveSiteId) {
-                $ResolvedSiteId = $Connection.ActiveSiteId
-                Write-Verbose "Using active Configuration Set '$($Connection.ActiveSiteName)' (ID: $ResolvedSiteId)"
+            $CurrentSettings = $null
+            if ($PSCmdlet.ParameterSetName -eq 'ByInputObject') {
+                $CurrentSettings = $InputObject
             } else {
-                throw "No -SiteId was provided, and no active Configuration Set has been set. Please use Set-WEMActiveConfigurationSite or specify the -SiteId parameter."
+                # If only an ID is provided, we must first get the object.
+                Write-Verbose "Retrieving current settings for Application with ID '$($Id)'..."
+                # Get-WEMApplication uses the active site by default if one is set.
+                $CurrentSettings = Get-WEMApplication | Where-Object { $_.Id -eq $Id }
+                if (-not $CurrentSettings) {
+                    throw "An application with ID '$($Id)' could not be found in the active or specified site."
+                }
             }
 
-            $TargetDescription = "WEM Application with ID '$($Id)' in Site ID '$($ResolvedSiteId)'"
+            $TargetDescription = "WEM Application '$($CurrentSettings.Name)' (ID: $($CurrentSettings.Id))"
             if ($PSCmdlet.ShouldProcess($TargetDescription, "Update")) {
 
-                # If -IconFile was used, convert it and populate the $IconStream variable
-                if ($PSCmdlet.ParameterSetName -eq 'File') {
+                # If -IconFile was used, convert it and populate the IconStream parameter
+                if ($PSBoundParameters.ContainsKey('IconFile')) {
                     Write-Verbose "Converting icon file '$($IconFile)' to base64 string..."
-                    $IconStream = Convert-IconFileToBase64 -Path $IconFile
+                    $IconStream = Export-FileIcon -FilePath $IconFile -Size 32 -AsBase64
+                    # Add IconStream to PSBoundParameters so it gets updated below
+                    $PSBoundParameters['IconStream'] = $IconStream
                 }
 
-                # Build the application object with only the properties that were explicitly provided
-                $AppObject = @{
-                    id     = $Id
-                    siteId = $ResolvedSiteId
+                # Modify only the properties that were specified by the user
+                $ParametersToUpdate = $PSBoundParameters.Keys | Where-Object { $CurrentSettings.PSObject.Properties.Name -contains $_ }
+                foreach ($ParamName in $ParametersToUpdate) {
+                    Write-Verbose "Updating property '$($ParamName)' to '$($PSBoundParameters[$ParamName])'."
+                    $CurrentSettings.$ParamName = $PSBoundParameters[$ParamName]
                 }
-                if ($PSBoundParameters.ContainsKey('DisplayName')) { $AppObject.Add('displayName', $DisplayName) }
-                if ($PSBoundParameters.ContainsKey('CommandLine')) { $AppObject.Add('commandLine', $CommandLine) }
-                if ($PSBoundParameters.ContainsKey('Parameter')) { $AppObject.Add('parameter', $Parameter) }
-                if ($PSBoundParameters.ContainsKey('IconStream') -or $PSBoundParameters.ContainsKey('IconFile')) { $AppObject.Add('iconStream', $IconStream) }
-                if ($PSBoundParameters.ContainsKey('StartMenuPath')) { $AppObject.Add('startMenuPath', $StartMenuPath) }
-                if ($PSBoundParameters.ContainsKey('WorkingDirectory')) { $AppObject.Add('workingDir', $WorkingDirectory) }
-                if ($PSBoundParameters.ContainsKey('State')) { $AppObject.Add('state', $State) }
-                if ($PSBoundParameters.ContainsKey('SelfHealing')) { $AppObject.Add('selfHealing', $SelfHealing) }
-                if ($PSBoundParameters.ContainsKey('WindowStyle')) { $AppObject.Add('windowsStyle', $WindowStyle) }
-                if ($PSBoundParameters.ContainsKey('Name')) { $AppObject.Add('name', $Name) }
-                if ($PSBoundParameters.ContainsKey('Description')) { $AppObject.Add('description', $Description) }
 
-                $Body = @{ applicationList = @($AppObject) }
-
+                # The API expects the entire object wrapped in an applicationList array for a PUT request.
+                $Body = @{ applicationList = @($CurrentSettings) }
                 $UriPath = "services/wem/webApplications"
-                $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "PUT" -Connection $Connection -Body $Body
-                Write-Output ($Result | Expand-WEMResult)
+                Invoke-WemApiRequest -UriPath $UriPath -Method "PUT" -Connection $Connection -Body $Body
+
+                if ($PassThru.IsPresent) {
+                    Write-Verbose "PassThru specified, retrieving updated application..."
+                    $UpdatedObject = Get-WEMApplication | Where-Object { $_.Id -eq $CurrentSettings.Id }
+                    Write-Output $UpdatedObject
+                }
             }
         } catch {
-            Write-Error "Failed to update WEM Application with ID '$($Id)': $($_.Exception.Message)"
+            $Identifier = if ($Id) { $Id } else { $InputObject.Name }
+            Write-Error "Failed to update WEM Application '$($Identifier)': $($_.Exception.Message)"
+            return $null
         }
     }
 }

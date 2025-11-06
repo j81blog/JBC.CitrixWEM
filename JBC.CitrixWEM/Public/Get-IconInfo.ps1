@@ -80,6 +80,7 @@ namespace Win32 {
 
         // Constants for Resource Types
         public const uint RT_GROUP_ICON = 14;
+        public const uint RT_ICON = 3;
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         public static extern IntPtr LoadLibraryEx(string lpFileName, IntPtr hFile, uint dwFlags);
@@ -91,6 +92,21 @@ namespace Win32 {
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool EnumResourceNames(IntPtr hModule, uint lpszType, EnumResNameProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        public static extern IntPtr FindResource(IntPtr hModule, IntPtr lpName, IntPtr lpType);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        public static extern IntPtr FindResource(IntPtr hModule, string lpName, IntPtr lpType);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr LoadResource(IntPtr hModule, IntPtr hResInfo);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr LockResource(IntPtr hResData);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern uint SizeofResource(IntPtr hModule, IntPtr hResInfo);
     }
 }
 "@
@@ -124,9 +140,15 @@ namespace Win32 {
                 $Name = "#$($LpszName.ToInt32())"
             }
 
+            # Store both the name and whether it's an integer or string
+            $isInteger = (($LpszName.ToInt64() -band 0xFFFF0000) -eq 0)
+            $iconId = if ($isInteger) { $LpszName.ToInt32() } else { -1 }
+
             $IconResources.Add([PSCustomObject]@{
                     Index = $IconResources.Count
                     Name  = $Name
+                    IsInteger = $isInteger
+                    ResourceId = $iconId
                 }) | Out-Null
 
             # Return $true to continue the enumeration.

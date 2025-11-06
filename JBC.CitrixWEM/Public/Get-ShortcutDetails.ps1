@@ -36,7 +36,7 @@ function Get-ShortcutDetails {
             $IconFile = $sc.TargetPath
         }
         if ($ExtractIcon) {
-            $IconStream = Get-FileIconBase64 -FilePath $IconFile -Size 32 -Index $IconIndex
+            $IconStream = Export-FileIcon -FilePath $IconFile -Size 32 -Index $IconIndex -AsBase64
         }
 
         Write-Output ([PSCustomObject]@{

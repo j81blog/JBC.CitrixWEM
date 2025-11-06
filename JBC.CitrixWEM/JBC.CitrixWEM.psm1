@@ -1,32 +1,5 @@
 #Requires -Version 5.1
 
-# Load the assembly explicitly
-if (-not ([System.Management.Automation.PSTypeName]'NativeMethods').Type) {
-    Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-
-namespace Win32 {
-    public class NativeMethods {
-        public delegate bool EnumResNameProc(IntPtr hModule, int lpszType, IntPtr lpszName, IntPtr lParam);
-
-        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        public static extern IntPtr LoadLibraryEx(string lpFileName, IntPtr hFile, uint dwFlags);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool FreeLibrary(IntPtr hModule);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        public static extern bool EnumResourceNames(IntPtr hModule, int lpszType, EnumResNameProc lpEnumFunc, IntPtr lParam);
-
-        public const int RT_GROUP_ICON = 14;
-        public const uint LOAD_LIBRARY_AS_DATAFILE = 0x00000002;
-    }
-}
-"@ -Language CSharp
-
-}
-
 # Define paths to public and private functions in a more robust way
 $PublicPath = Join-Path -Path $PSScriptRoot -ChildPath 'Public'
 $PrivatePath = Join-Path -Path $PSScriptRoot -ChildPath 'Private'
@@ -50,17 +23,6 @@ $AppDataPath = [System.IO.Path]::Combine($env:APPDATA, $ModuleName)
 $Script:WEMConfigFilePath = [System.IO.Path]::Combine($AppDataPath, "$ModuleName.json")
 $Script:WEMModuleConfig = $null
 Update-WEMModuleConfigSetting
-
-#Check if IconExtractor is available
-#$Path = Join-Path -Path $PSScriptRoot -ChildPath "Binaries\IconExtractor\IconExtractor.exe"
-$Path = Join-Path -Path $PSScriptRoot -ChildPath "Binaries\iconsext\iconsext.exe"
-if (-not (Test-Path -Path $Path)) {
-    #Write-Warning -Message "IconExtractor not found at path: $Path"
-    Write-Warning -Message "iconsext not found at path: $Path"
-    $Script:IconExtractor = $null
-} else {
-    $Script:IconExtractor = $Path
-}
 
 # Explicitly export ONLY the public functions to the user.
 # The private functions remain available inside the module, but are hidden from the user.

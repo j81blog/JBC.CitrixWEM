@@ -2,29 +2,127 @@ function New-WEMApplication {
     <#
     .SYNOPSIS
         Creates a new application action in a WEM Configuration Set.
-    .DESCRIPTION
-        This function creates a new application shortcut action within a specified
-        WEM Configuration Set (Site). If -SiteId is not specified, it uses the active
-        Configuration Set defined by Set-WEMActiveConfigurationSite.
-    .PARAMETER SiteId
-        The ID of the WEM Configuration Set (Site) where the application will be created. Defaults to the active site.
-    .PARAMETER DisplayName
-        The name of the application shortcut to be displayed to the user.
-    .PARAMETER CommandLine
-        The command line executable path for the application.
-    .PARAMETER IconStream
-        A base64-encoded string of the icon to be used for the shortcut.
-    .PARAMETER IconFile
-        A path to an icon file. The file will be automatically converted to a base64 string.
-    .EXAMPLE
-        PS C:\> New-WEMApplication -DisplayName "My App" -CommandLine "C:\apps\app.exe" -IconFile "C:\icons\myicon.ico"
 
-        Creates a new application shortcut named "My App" in the active Configuration Set, using a local icon file.
+    .DESCRIPTION
+        This function creates a new application shortcut action within a specified WEM Configuration Set (Site).
+        It supports three application types: InstallerApplication (executables), Url (web shortcuts), and
+        FileFolder (folder shortcuts). Icons can be provided either as a file path (automatically converted
+        to base64) or as a pre-encoded base64 string.
+
+        If -SiteId is not specified, the function uses the active Configuration Set defined by
+        Set-WEMActiveConfigurationSite. The function supports WhatIf and Confirm for safe testing.
+
+    .PARAMETER SiteId
+        The ID of the WEM Configuration Set (Site) where the application will be created.
+        If not specified, uses the active Configuration Set from Set-WEMActiveConfigurationSite.
+
+    .PARAMETER DisplayName
+        The display name of the application shortcut as shown to users. This is a required parameter.
+
+    .PARAMETER CommandLine
+        The executable path or command line for the application. Used with InstallerApplication type.
+        Example: "C:\Program Files\MyApp\app.exe"
+
+    .PARAMETER IconStream
+        A base64-encoded string representing the icon for the application shortcut.
+        Use this parameter when you already have a base64-encoded icon. This parameter
+        belongs to the 'Stream' parameter set.
+
+    .PARAMETER IconFile
+        The file path to an icon file (.ico, .exe, .dll). The icon will be automatically
+        extracted and converted to a base64 string. This parameter belongs to the 'File'
+        parameter set and is the default method for providing icons.
+
+    .PARAMETER Name
+        The internal name for the application action. If not specified, defaults to the DisplayName value.
+
+    .PARAMETER Description
+        An optional description for the application action.
+
+    .PARAMETER AppType
+        The type of application being created. Valid values:
+        - InstallerApplication: Standard executable application (default)
+        - Url: Web URL shortcut
+        - FileFolder: Folder or file shortcut
+
+    .PARAMETER StartMenuPath
+        The Start Menu path where the shortcut will be created.
+        Default: "Start Menu\Programs"
+
+    .PARAMETER WorkingDirectory
+        The working directory for the application when launched.
+
+    .PARAMETER State
+        The state of the application action. Valid values:
+        - Enabled: Application is active and available (default)
+        - Disabled: Application is inactive
+
+    .PARAMETER Parameter
+        Additional command-line parameters to pass to the application.
+
+    .PARAMETER Url
+        The URL for web shortcuts. Used when AppType is set to "Url".
+        Example: "https://www.example.com"
+
+    .PARAMETER FolderPath
+        The folder path for folder shortcuts. Used when AppType is set to "FileFolder".
+        Example: "C:\Users\Public\Documents"
+
+    .PARAMETER SelfHealing
+        Enables or disables self-healing for the application shortcut.
+        Default: $true
+
+    .PARAMETER ActionType
+        The action type for the application. Currently only "CreateAppShortcut" is supported.
+        Default: "CreateAppShortcut"
+
+    .PARAMETER Hotkey
+        The keyboard hotkey for launching the application.
+        Default: "None"
+
+    .PARAMETER WindowStyle
+        The window style when the application launches. Valid values:
+        - Normal: Standard window (default)
+        - Minimized: Start minimized
+        - Maximized: Start maximized
+
+    .PARAMETER PassThru
+        Returns the created application object. By default, this function does not return output.
+
+    .EXAMPLE
+        PS C:\> New-WEMApplication -DisplayName "Notepad" -CommandLine "C:\Windows\System32\notepad.exe" -IconFile "C:\Windows\System32\notepad.exe"
+
+        Creates a new application shortcut for Notepad in the active Configuration Set, extracting the icon from notepad.exe.
+
+    .EXAMPLE
+        PS C:\> New-WEMApplication -DisplayName "Company Portal" -AppType Url -Url "https://portal.company.com" -IconFile "C:\icons\portal.ico" -PassThru
+
+        Creates a URL shortcut to the company portal with a custom icon and returns the created object.
+
+    .EXAMPLE
+        PS C:\> New-WEMApplication -DisplayName "Shared Documents" -AppType FileFolder -FolderPath "\\server\share\documents" -IconFile "C:\icons\folder.ico" -SiteId 42
+
+        Creates a folder shortcut to a network share in Configuration Set with ID 42.
+
+    .EXAMPLE
+        PS C:\> New-WEMApplication -DisplayName "Chrome" -CommandLine "C:\Program Files\Google\Chrome\Application\chrome.exe" -Parameter "--incognito" -WorkingDirectory "%USERPROFILE%" -IconFile "C:\Program Files\Google\Chrome\Application\chrome.exe" -WindowStyle Maximized
+
+        Creates a Chrome application shortcut that launches in incognito mode, maximized, with a custom working directory.
+
+    .EXAMPLE
+        PS C:\> New-WEMApplication -DisplayName "MyApp" -CommandLine "C:\apps\myapp.exe" -IconStream $Base64Icon -WhatIf
+
+        Tests creating an application using a pre-encoded icon without actually creating it (WhatIf).
+
     .NOTES
-        Version:        1.1
+        Version:        1.2
         Author:         John Billekens Consultancy
-        Co-Author:      Gemini
+        Co-Author:      Claude Code
         Creation Date:  2025-08-12
+        Updated:        2025-11-06
+
+        The function uses parameter sets to ensure either IconFile or IconStream is provided, but not both.
+        If no icon is provided via IconStream, a default WEM icon is used.
     #>
     [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'File')]
     [OutputType([PSCustomObject])]
@@ -77,6 +175,13 @@ function New-WEMApplication {
         [bool]$SelfHealing = $true,
 
         [Parameter(Mandatory = $false)]
+        [ValidateSet("CreateAppShortcut")]
+        [string]$ActionType = "CreateAppShortcut",
+
+        [Parameter(Mandatory = $false)]
+        [string]$Hotkey = "None",
+
+        [Parameter(Mandatory = $false)]
         [ValidateSet("Normal", "Minimized", "Maximized")]
         [string]$WindowStyle = "Normal",
 
@@ -107,21 +212,21 @@ function New-WEMApplication {
 
             if ($PSCmdlet.ParameterSetName -eq 'File') {
                 Write-Verbose "Converting icon file '$($IconFile)' to base64 string..."
-                $IconStream = Convert-IconFileToBase64 -Path $IconFile
+                $IconStream = Export-FileIcon -FilePath $IconFile -Size 32 -AsBase64
             }
 
             $Body = @{
                 siteId        = $ResolvedSiteId
                 startMenuPath = $StartMenuPath
                 state         = $State
-                actionType    = "CreateAppShortcut"
+                actionType    = $ActionType
                 iconStream    = $IconStream
                 selfHealing   = $SelfHealing
                 name          = $Name
                 url           = $Url
                 commandLine   = $CommandLine
                 displayName   = $DisplayName
-                hotKey        = "None"
+                hotKey        = $Hotkey
                 appType       = $AppType
                 windowsStyle  = $WindowStyle
                 folderPath    = $FolderPath
