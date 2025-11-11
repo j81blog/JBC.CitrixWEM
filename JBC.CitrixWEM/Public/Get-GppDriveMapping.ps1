@@ -62,7 +62,7 @@ function Get-GppDriveMapping {
     .LINK
         https://github.com/j81blog/JBC.CitrixWEM
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = "Default")]
     param (
         [Parameter(
             Mandatory = $true,
@@ -78,6 +78,20 @@ function Get-GppDriveMapping {
         [Parameter(HelpMessage = "Path to export the results to a JSON file.")]
         [string]$JsonFilePath,
 
+        [Parameter(
+            Mandatory = $true,
+            ParameterSetName = "FQDN",
+            HelpMessage = "Domain FQDN for printer path conversion."
+        )]
+        [string]$Domainname,
+
+        [Parameter(
+            Mandatory = $true,
+            ParameterSetName = "FQDN",
+            HelpMessage = "Converts printer paths to FQDN format."
+        )]
+        [switch]$ConvertPathToFQDN,
+
         [Parameter(HelpMessage = "Skips drive mappings with Delete action.")]
         [switch]$SkipDeleteAction
     )
@@ -90,6 +104,12 @@ function Get-GppDriveMapping {
         }
         if (-not (Get-Module -ListAvailable -Name ActiveDirectory)) {
             Write-Error "The ActiveDirectory module is required. Please install it via RSAT."
+            return
+        }
+
+        # Validate ConvertPathToFQDN requires Domainname
+        if ($ConvertPathToFQDN -and [String]::IsNullOrEmpty($Domainname)) {
+            Write-Error "The -ConvertPathToFQDN switch requires the -Domainname parameter to be specified."
             return
         }
 
@@ -158,12 +178,29 @@ function Get-GppDriveMapping {
                             $Action = $Drive.Properties.action
                         }
 
+                        try {
+                            if ($ConvertPathToFQDN -and -not [String]::IsNullOrEmpty($Domainname)) {
+                                $server, $path = "$($Drive.Properties.path)".TrimStart('\\').Split('\', 2) | ForEach-Object { if ($_) { $_ } }
+                                if ($server -like "*.*.*") {
+                                    $FQDN = $server
+                                } else {
+                                    $FQDN = "$($server).$($Domainname)"
+                                }
+                                $networkPath = "\\$($FQDN)\$($path)"
+                            } else {
+                                $networkPath = "$($Drive.Properties.path)"
+                            }
+                        } catch {
+                            Write-Warning "Failed to convert printer path to FQDN format. Using original path. Error: $($_.Exception.Message)"
+                            $networkPath = "$($Drive.Properties.path)"
+                        }
+
                         # Create the output object
                         $Output = [PSCustomObject]@{
                             GpoName               = $GpoNameItem
                             Action                = $Action
                             DriveLetter           = $Drive.Properties.letter
-                            NetworkPath           = $Drive.Properties.path
+                            NetworkPath           = $networkPath
                             Label                 = $Drive.Properties.label
                             Persistent            = [bool][int]$Drive.Properties.persistent
                             UseDriveLetter        = [bool][int]$Drive.Properties.useletter
@@ -174,7 +211,7 @@ function Get-GppDriveMapping {
                             WEMAssignments        = @($TargetedGroup)
                             WEMNetworkDriveParams = [PSCustomObject]@{
                                 Name        = $Drive.Properties.label
-                                TargetPath  = $Drive.Properties.path
+                                TargetPath  = $networkPath
                                 DisplayName = $Drive.Properties.label
                             }
                             WEMAssignmentParams   = [PSCustomObject]@{
@@ -214,8 +251,8 @@ function Get-GppDriveMapping {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBbsU6W/H3tfiO/
-# iDd5LKMI2OZvhgRFRkzeHlFZUlx7I6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAYKkb0M/y3b8X4
+# gYkYAHepCHJ/7gmTMu8i8zqQqJDTlaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -391,31 +428,31 @@ function Get-GppDriveMapping {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBdIJI1T/KyeJtbnDm+3J7d5u3mj5P4/KwEwNxEfo1J
-# VjANBgkqhkiG9w0BAQEFAASCAYBrdVEWvuJx+Ylvj4rPZ7u6HAhYw4W0CIKKTTnu
-# rmU9fxOTvEfAggyfcxaIz6DOLaaACyXghqEi8Ol8NE7ii2a63Ra9bT1RMzTF0MfW
-# E6c99PIHTfaktKLxjJHhscGro7ApIdrLbftvYLY/4jhBeMC2msMf/lLp2+aHt4fw
-# uIw2N7iOVNlWHiNT0SxeIi9B6OezwgLLJsUKkwZEORg6Wpq8DIVmt7Q3cBNFqHIA
-# pSxPIH1TEcQEaHGYiIBSQ7aVSzqJcmAdYPKlS9RO4Ft+KvCkG9XSnr1Ww0DJXpR+
-# fsRbjdoQIFy4/ZgcvqIxjZEtkEImdJiomHcDlNQUZyUC9k8LXOyn8YS5ifwWW95i
-# cDTxM4xNvTxF0W1WhFUFukxIJm9d0Rrrig1RYOa2aTvKcC6ERIcchqNwrGDq0gRe
-# 12t7b4a8cjkVi5aV6JrBo1WVYV4XwlhNHipWg0T7+nVNEac3fhWWg0X3AN8/ZmkM
-# S9wMVgiQE/2hPucUqJocrBRZhiOhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBczTqGFhCIm6iHF7l0XnjVJq/zzC7NTiT0sZuNFQ0k
+# EjANBgkqhkiG9w0BAQEFAASCAYC/dlmGZjXQYRdNKTMQ5/zehhWrTu6qRyiPJGnK
+# pCN6Z6Pt5nTPe2BOXkz06wny4ExazN1TBbJUx0eRiVLp3e6V7kHqeqb6TgUtWyEW
+# 48V6KB0vMGsDAH2eXxECmbJnxbT2tGWHriB4K9tXkOIMKVEwSwz2W7YpGEsFWCj/
+# 4iNJ6ylbgNTRyXBqpXw6Hq8OS1toF6iIajmt7NNmN9RlP9pRswqRpQCItWHoYtTC
+# UapfLDrt06V2BrWuYHHVUAKbhZ0PEbCa1/ny57XbWW5vZEo3P2XE8VhWvi3UxyWA
+# mha3yCCXQIXAFavHs99A1k4g1i1bboaBbDyEgjD9xIoLDlLOQ87G0vA3rDyNAd7n
+# IQOJIRJhud2hMCJkiH1+B0zmhjLfB/DXWsaHzq+QG4hcCeu/rJijfJFYeTw+ydpG
+# JyTVnzLOxC+gvJKJHfaHQeK+Q6O07AlO0K9CdzkLTlFjIwTR6nwTQm4fLWglTxKA
+# MPGnC7SONL8im4g1Do+pNVLVy7OhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMTMzMTBaMD8GCSqGSIb3
-# DQEJBDEyBDAPRqJ9Ng+yiamroH3y18lyNmIPywCd9CnI/dLMIOzseRPV5+Tn9FyF
-# egWjwXhqAmIwDQYJKoZIhvcNAQEBBQAEggIAENMFrsen4HtV5V+732sQB1B3t+oH
-# s4YkcTrNfLii6rW7RZVEihoTPYueO7CLWdLkwVDOHomjlDztUt86gh5+i5S4m2z2
-# OkykHs6M9ttzKPdg4qQHMj9czc5XdeNigQlcpyUK+Nqhcq1Y9QA5yUbN/U9Nv8RI
-# JYP5IIx2QgMoClpEO/M+VUCeGsDT6Fq7hZ0YrM8zgM8vY0XLTExvlUOus+ed25YF
-# 8MGFnefmzhVjCepVz003dRnLiibNHUiWL4nQZGdVix6mad2RLG4UQyzeOq92NxUY
-# 4bEhgTAbVd/6t2PpzuiAVkgSXKn29/WAz//zGHRHCwIO/hBpP8az9GH80XR9euPo
-# 89i8C6KxHgGHnIKafHvVb5/03HP+1i+PEZwFwZ/ijGXlFiVM6VGx+k0GpS6LbYek
-# lZzhboyeDLRPZ079RNJGQk9Oq41PztJcqZeHorPIl/JfdTDgJR6ZLB0ABUaTXAYq
-# DWkurJj7F6khWToAli0ktHIH1Ii9NeFsWP+9BKPhVDTLRgsDKvDzZNLwyHvtTTno
-# ilKA8Vq6/DNoLH2bTkLfQ9gDt1e8TCRq5DWBKtAL+VnDFX0zxRuKa7AsHZ2KlgZ6
-# AmUfcJvYBRIKoKFrIe0qcXA+ERnOu/KbPcRtM0di3Y5beepfLJbWFjlydwVNM/Ws
-# ll4l7ex0cSvhuLk=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMjEwMTRaMD8GCSqGSIb3
+# DQEJBDEyBDD7Jz1qXuyguQjBbFS/2WWy+g3jVpaL81A4jSL6ijVrLdsDb//ePyfI
+# FIG5TcLK5+UwDQYJKoZIhvcNAQEBBQAEggIApyWwTSdwxOzmOEWq+NFxV/1YZJEi
+# 52HOREco4onfCa4sGAF2yozcdG9WvxfHgQqDy0MAbYsGvDDXcHsRh0GQ3NFg4FVX
+# TB9fiwsjZaaZtUzxEbfDtbKKnyDOP3Hs5b11v+7vuQaTGvCrPhLFir1lLBT5B8+D
+# XM/OUbtxrYjw7Vg6TsYM0Vkc4Uf6lKtA0WcSFcMYw+i+K7NCT1C2fsEz3O2ojaXo
+# 7pMXOU4oY69mR6u8NSNVsoXi1o18j17+P25loZNPVWprknwuZ2o+D6ACcx5oW6Mk
+# C4qiUFuCho0GV1YOpxOBgY4r3d6TUuWVwUJnP3nhSLJQjunYPBWi+UcQY/N8/G1s
+# 1SK+dfxmVSLpJ0TnGOCn9SQzDxWxqQ/NuWw/fQ0f0aTdmgDVNtecl/BgcRnq1qF6
+# BT1j8znUQQoqTUBF6vaHuntJz9o+V0ofro3kOt7Kn/en3p0Tbx0gIRb95Bf9vI2s
+# //B14DmHvsI9l4U+fLxH5CJRwnqu0bOIDjBmxV/QKTx/tLoQPPOzzcUTBuSCv9oH
+# 7vDjP4jlQ6LWutMJXW5McnYZo05vlUoFxbfiTtazEXX7/Z8yXuG1rCF4li0kYOXY
+# CzVh00yEgl3pB+3p06c9hrmtX/3X3a5jTl2a7CO1ah8LPjuylZSjGbZmTWjRj2Vw
+# zdBe1u0tMfHzWAg=
 # SIG # End signature block
