@@ -231,14 +231,13 @@ function Get-GppShortcut {
                             default { $WindowStyle = "Normal" }
                         }
                         Write-Verbose "Creating output object for shortcut: '$($Shortcut.name)'"
-                        $IconPath = "$IconStreamDefault"
                         try {
-
                             try {
-                                $IconPath = Convert-BatchVarToPowerShell -Path $Shortcut.properties.IconPath -Resolve -ErrorAction Stop
+                                if ($Shortcut.properties.IconPath -like "%*%*") {
+                                    $IconPath = Convert-BatchVarToPowerShell -Path $Shortcut.properties.IconPath -Resolve -ErrorAction Stop
+                                }
                             } catch {
                                 $IconPath = $Shortcut.properties.IconPath
-                                Write-Warning "Error details: $($_ | Get-ExceptionDetails | Out-String)"
                             }
                             switch ($IconPath) {
                                 "C:\Windows\System32\explorer.exe" { $IconPath = "C:\Windows\explorer.exe" }
@@ -263,7 +262,6 @@ function Get-GppShortcut {
                                 } catch {
                                     Write-Warning "Shortcut: `"$($Shortcut.name)`", Failed to export icon from path:`r`n         '$IconPath'`r`n         With index: $IconIndex.`r`n         Error: $($_.Exception.Message)`r`n         Using default icon stream."
                                     $IconStream = "$IconStreamDefault"
-                                    Write-Warning "Error details: $($_ |Get-ExceptionDetails | Out-String)"
                                 }
                             } else {
                                 if ($IconPath) {
@@ -272,7 +270,6 @@ function Get-GppShortcut {
                             }
                         } catch {
                             Write-Warning "Shortcut: `"$($Shortcut.name)`", Failed to retrieve icon from path:`r`n         '$IconPath'`r`n         With index: $IconIndex.`r`n         Error: $($_.Exception.Message)"
-                            Write-Warning "Error details: $($_ |Get-ExceptionDetails | Out-String)"
                         }
                         if ([String]::IsNullOrEmpty($IconStream)) {
                             $IconPath = "$IconStreamDefault"
@@ -283,7 +280,7 @@ function Get-GppShortcut {
                             $Enabled = $false
                         }
                         $workingDir = $Shortcut.Properties.startIn
-                        if (-Not [string]::IsNullOrEmpty($CommandLine) -and [string]::IsNullOrEmpty($workingDir) -and $ActionType -eq "CreateAppShortcut") {
+                        if (-not [string]::IsNullOrEmpty($CommandLine) -and [string]::IsNullOrEmpty($workingDir) -and $ActionType -eq "CreateAppShortcut") {
                             $workingDir = Split-Path -Path $CommandLine -Parent
                         }
                         $Output = [PSCustomObject]@{
@@ -393,8 +390,8 @@ function Get-GppShortcut {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCHxUfry3DNUZkv
-# 5MzdxvWdCHHNq7BqWBxspXcNYT/5DaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAhwAGigk9YF71d
+# nPh3zJFwPY2+BTfA6NKctmva+zGumaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -570,31 +567,31 @@ function Get-GppShortcut {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBJXLA2u1UBU6xLiNNS43uS4Lbi9VFGKCQCB+gf0aEY
-# szANBgkqhkiG9w0BAQEFAASCAYCiG1F/yRPUT61Dnfv0us4IkFoS+ySUtker5bk/
-# MBlF4E5gXOIcLm2hC+qaet11r1n2CKQjPvG1gbARop1ez0VbUkqGbA2VUMGZDLCx
-# Rqno2ZajYf3SH3H6EILoo75enHle7mMyTYbTNj675/Rw6AwQg9RRRvh3DzKHeGKD
-# PSTOW0w83PPqPkvG0S+RiA5E2wrGQtNx2qy/D6W5LV6v/l4jE8NwyIkvIE9WogNr
-# amONtJQzvYBILHpY93/0dKDm0wrzy5Lo83Ak/6qCYIKOj3jCu7XoGvyjCLggO7a5
-# A2MooqVNLF49Ay631N+BkeVojJbRHvBHRfr7z9zdXTxadICPKxloCl5ukRzmmQE3
-# 7YBci2d/RtMEYFvzyaZY7yoi5GmvrA5KBVO0jHyXb14g9y2AUOQxe8n3rB+2DiRu
-# EOEiYJtykDWtfkJHNR9IM4By7YAGSI/gUlEuxBO1zw+Bfl8+jTfhdCxW/xfrGYhO
-# F84SKzo02xxU+17nr2078eFXhVihggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDr5tebviwCMpO+w7GV6xc7ahxogwQ1FQb8wXOSheG1
+# VzANBgkqhkiG9w0BAQEFAASCAYAqNCsG5ZsbK9AdqX5efr6DOMG71cURY6FUUu39
+# N54CZ7vUuaYtJ83qVd99eGJWbmreAXFxZlV6b6Se7yYCoO4igLeTdFlrKkEfyboC
+# kScHQ3pVSw6V0xmFvFab5YJa6lVc+iJfjIvFFGWE36ILA/6n+mmQRddV0DVz4Jc9
+# R0hkV6f3q5MX0x4urPT7h/H0WtQeGQXuik84qLd6MMlWqehDfsXvcM/ZYNpWhvn9
+# C8vKyuvixADKJYZ4/4++sQoxKMJABbpGRDuG8H49qebfqYQxvnyuAcZ2bTR8CqMG
+# 2T/bEnL0Q3YusjOJ/SzD7ws4Yyz7rycIEesOMZIKKDUqmK857vvPjKav902Qrx2j
+# 5EX/3RsbKVYf1zuEYbv1zDBP4+kOGJAumyid52Thb6bcpBpYymUmvGEPh6P5xWrd
+# qMH97SDB6wISMtMULXjWBRrNis4cHf42hJn3hkld1si5sr4ejcTH3ich9xH3u55n
+# GZnzpdbyxgpIoyS/aMpKPCopY3KhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMjM5MTdaMD8GCSqGSIb3
-# DQEJBDEyBDBgmKvRm1sI3sQudgrxbLiD1DHe2HfQqHYAQR2Ned9wkvQk4Xi3RvNo
-# FKzjS0h43dowDQYJKoZIhvcNAQEBBQAEggIALrO6OGj9XbaY23JtLgpVstV9B08p
-# Bn2UIAVjKI9rYqGAmwN9Efki7sc0D90diIrVjimxbvn/EBr2+rJ5H207LyIZJIGY
-# 16eySkXnyDAmlv4ghrFClGCBcBQFO6SJv62iu0a9AHOM9BwtavtG5ea+i9M6kR0y
-# gw7v0NZrQSzowzFEEoC2TEuPt3x/+noJBpH+DS2oEoS9bziN9HejjA6F7eK2qwd9
-# a0ymH+fxbarrcf4+J/fOdeiRsh0gne+udoGzwHJtVQFguNTl+vKwu6+3SfL8N9nD
-# X/X/SNVVZ3jNAgvhAgG1oE/gtGf87kxu++fatDlK2OI/GV50naQyZeKES0cWKsEj
-# 6PW+KHIZNnOi+mRX0oX2DkT3FfIPa5zIRldrOymFDb/SB9EMnm8Wa9I+CiuxiK2l
-# 4JWo4m6vgbd9B7KJepXNh9vsSZNOOeOOHWCHpLwsTbu0y9d8+9Cw1J9xABQUplTI
-# O0zUowZTDSCTHFdMMkRDb6WESQKpWmau0+nKo1OxD2H9/GjLMpGEjKlPn5PAFx8+
-# Lr3QrtGZYlV8r7vOXYhYY5FPWN+sOtz4c5LdQdysrxThosYFMugVL+JLQjE0nYa+
-# 1mgmnyqJ91k2WHoYWblqsoR0JBnL8AW1rmBEmhxcOavpjXl2G4k9hmMe5lWDE6fj
-# 5Cax4R2CsUoiKwo=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMjUxMDVaMD8GCSqGSIb3
+# DQEJBDEyBDB3Nc5SrMErxflozzg5k0ejUrWW6i/5v+RPGL9aPtcVtx32lAJEbVy4
+# F/TUmmpLLDowDQYJKoZIhvcNAQEBBQAEggIARlS3RN2vDkt2CBSgE/rNxUFyv1uF
+# EvoTb4ftjHJMONq2cOYEOpQlu831x8zGgXN63ErjvgOICiGq+hbm1t/PPBELci5l
+# gIri0gBTw9GXee1YsFpHE+cV3XpKT/lJNIPAmSQOmBO3yoJNZt9qNUQyd3Na1uSx
+# Ks9LHevmR5ODlTH1eo0xQuYSoKgGqAS2r7kXC6LztkjlVlOrd3xj02hT7mFGlbaz
+# pVysLNSGcYHMCZoU52kdRdYIL4VgWgCeR8Q7V/MmLY7AqZFevFmQ8AsCp5gPK5P9
+# ffW4imi0bEMbT9v09/9pqXncRbr7S3pla9b0/X19KucgtagOlf6l1+U/HXJx5ivM
+# xEhR6qn7/E1uJIWntYEr7fMZ0Am/qfixRtJq5jYIQrwJytZZ8lt5rM7UoGi/o0cW
+# jIOEDL08IvVLUa2nDL5xBSNhajqZa9ubSsTF6twDat84TAgDLzAs7ZKPZVWGhlSc
+# 6ryxP18/AydV970M+rHFyqJHwfttWJKWvTNFLf+owf2PfoJKVH/V8BbiwCTTfBAC
+# gkLiUwLLiX9ybhxE180rz5vA7fOF7CAh4xtVzZZYh5ROfymOifr8MgvXbeX46q1c
+# nIgxsu6NUTbvwCVO95WNdgezAscLgHiVFEbtGF1F1xHwES5U/BkKe3c1tEKajN/F
+# jx5eDACXWePd5pM=
 # SIG # End signature block
