@@ -1,6 +1,6 @@
-## Assigning a Citrix WEM Printer to an AD Group via PowerShell
+## Create and migrate a Citrix WEM Application via PowerShell
 
-This document outlines the process of assigning a printer to an Active Directory (AD) group within Citrix Workspace Environment Management (WEM) using a PowerShell script. The script leverages a custom module (`JBC.CitrixWEM`) to interact with the WEM API.
+This document outlines the process of assigning an application to an Active Directory (AD) group within Citrix Workspace Environment Management (WEM) using a PowerShell script. The script leverages a custom module (`JBC.CitrixWEM`) to interact with the WEM API.
 
 ---
 
@@ -131,14 +131,10 @@ Remove-WEMApplication -Id $WEMApplication.id
 
 ### 9. Example
 This example extracts details from a user GPO or Ivanti Workspace Control and creates the application(s) in WEM with the assignment.
-NOTE: This uses the "JBC.EUCMigrationTools" and "JBC.CitrixWEM" PowerShell Module
 
 ```PowerShell
 #Specify the GPO Name
 $GpoName = "The Name of the GPO containing the Shortcuts"
-
-#Import the Migration PowerShell Module
-Import-Module "JBC.EUCMigrationTools" -Force
 
 #OPTION 1 GPO: Read the shortcuts
 $Applications = Get-GppShortcut -GpoName $GpoName

@@ -45,24 +45,21 @@ Set-Variable -Name OnRemove -Value $OnRemove -Scope Script -Option AllScope
 $Script:ProgressPreference = "SilentlyContinue"
 
 if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
-    $InformationPreference = "Continue"
-    [ConsoleColor]$BackgroundColor = $Host.UI.RawUI.BackgroundColor
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "`r`nConnect to your wem environment using the one of the following options:"; ForeGroundColor = "White"; BackgroundColor = $BackgroundColor })
-    Write-Information -MessageData "1. OnPrem: "
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "Connect-WEMApi -WEMServer `"<https://YourWEMServer.fqdn>`" -Credential <Your WEM Credential>`n"; ForeGroundColor = "Cyan"; BackgroundColor = $BackgroundColor })
-    Write-Information -MessageData "2. Citrix Cloud (Web Credentials): "
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "Connect-WEMApi [-CustomerId <CustomerID>]`n"; ForeGroundColor = "Cyan"; BackgroundColor = $BackgroundColor })
-    Write-Information -MessageData "3. Citrix Cloud (API Credentials): "
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "Connect-WEMApi -CustomerId <CustomerID> -ClientId <ClientID> -ClientSecret <Secret>`n`n"; ForeGroundColor = "Cyan"; BackgroundColor = $BackgroundColor })
-    Write-Information -MessageData ([System.Management.Automation.HostInformationMessage]@{Message = "NOTE: To suppress this message in the future run: Set-WEMModuleConfiguration -ShowModuleInfo `$false"; ForeGroundColor = "Yellow"; BackgroundColor = $BackgroundColor })
-    $InformationPreference = "SilentlyContinue"
+    Write-InformationColored -Message "`r`nConnect to your wem environment using the one of the following options:" -ForegroundColor "White"
+    Write-InformationColored -Message "1. OnPrem: " -ForegroundColor "White"
+    Write-InformationColored -Message "Connect-WEMApi -WEMServer `"<https://YourWEMServer.fqdn>`" -Credential <Your WEM Credential>`n" -ForegroundColor "Cyan"
+    Write-InformationColored -Message "2. Citrix Cloud (Web Credentials): " -ForegroundColor "White"
+    Write-InformationColored -Message "Connect-WEMApi [-CustomerId <CustomerID>]`n" -ForegroundColor "Cyan"
+    Write-InformationColored -Message "3. Citrix Cloud (API Credentials): " -ForegroundColor "White"
+    Write-InformationColored -Message "Connect-WEMApi -CustomerId <CustomerID> -ClientId <ClientID> -ClientSecret <Secret>`n`n" -ForegroundColor "Cyan"
+    Write-InformationColored -Message "NOTE: To suppress this message in the future run: Set-WEMModuleConfiguration -ShowModuleInfo `$false`r`n" -ForegroundColor "Yellow"
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCOEdiLJfUqElB7
-# sx9Xs2sOVTXO4fR87RqOT1BNV9DIk6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBKkO8LOO7cKBqU
+# h/A/EVNYhDDn8HOnUcdBTR3avlj+taCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -238,31 +235,31 @@ if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDhD5XlwpjKkE3eaQf+DoUmQzNIBs/wmPHyvUxVMNlG
-# CzANBgkqhkiG9w0BAQEFAASCAYAGJtwZMwCXP7rQhSXQSb9EaUzplmgaGyj7E84C
-# 4+qkNUtZ+j/Vm8BMjqfkTzzw/g91KyEPBalqmqfJCKib6pNlf13EHLZeX0SS6fuD
-# HmMEjtXp0/W3/BKN73UVjT/mj2dGzMZYB3eVvfxDW4Zgv01+Ebm8tTU07auPzH8c
-# +jRrdO2WHuz7msrg8q35CyrlSjj+PkDIMbmsN0vGWoIrRjVDVpIx+c5TBDR3/hgu
-# 8aETmNN3ywzQi8SFcYmb7cCNXpOuzvKWWyOHa2xMWpJC66meGgAcs9t5fwSpmf0v
-# ypu/2eGSuATXBL5GW08DlIbOFwym2LOjO5wE7YZtWTEknqNB4WKpWZLh9fNqcDbQ
-# a7BB4oDuX8CqKTL0/1jnEl8+Jrmd/0cXVWlbha4zRJY2r1EsO8uDpWbqGQCDHIov
-# i9Of1l9vqpViIgNooopuaPzpGqhcS+Q9IFhR+WJpat8C6Afmqn16RWDpT0nIfPhf
-# t6InoaYIpriz6KQH8pJtwZV2+SWhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCCYR6Rzi3MTLK1nzGgM3kHTXFrTjN/jmVsc+sCL28op
+# IjANBgkqhkiG9w0BAQEFAASCAYB/2sTueRORGMkVi4yuQ71YANemEkcgSQ7watfu
+# QYtoldNr3IJ5UQrwZdBoDO7g6rYHC7zT4CEUMhqXUaw4yUarFBX3p2zxyyX/b+6/
+# HHHD5uN1pBonC11divPLIdonnjXd4kiurm9pi1WeVn/Bh+dtiHgTB+y1ONViUvxF
+# LKHtnAnkNmy1nbQ3vMl5kdZPemzSCB6urryKTbw/+munjozVIUAuH+B5sY27zmgm
+# Wd9aa+wvvW2pe3f84CAMAYyMQeC3YV0NPIqZREgEqrepta7KJVogaIpR/0VHM6Q4
+# VJ+9i++eurbfaprrXaRjMlmg1ufzP3M/fodi9TfbwDsUVM7xpNT7CrWC4YSTjjYj
+# unVyaAZOfSdqOeBHw/QiGrx5/T9zdV/JqkVxEiQtp9g8AMWiOYcCrqkejzJgQgM0
+# NtCHkjOXNsB9m9NYxTHSnkPHhi48jj0iyzrfbJNeU4Fp7eS4jWsy2NLkN1MzLF4m
+# D3hmTswxJtW9ekGg9V5bTJZo5xmhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTExMDA0MjRaMD8GCSqGSIb3
-# DQEJBDEyBDBVd9cSs7fpAkR42LLHn2y8Zw69F9M2+Zewx3xOgeId3azZegn+ecvA
-# +u17LkOTW6YwDQYJKoZIhvcNAQEBBQAEggIAPNdekplrb76bmFlZ10X3N1M1uqP/
-# 22+OCcnznp4LW4jNZmQSwlQcH5Eg2Qpf5GBrsD7D1zx6U5ijIenzBrRH6/8iJDPJ
-# A9kOf3NHGWR5MOy8THX07k9/TFZx3BmtsMKNAP/77p3kGz4qfGWmFGlwY0m/TGWI
-# gBRFtoCCsFi9/mTOWRQTOdMZk4+SIdw/4TJBvDH9AYhfYXHH74P4auJoYWfBf+f2
-# Rcto1JQuSEbZCov5iA8+sxK6bSYH0RFgll29u3qNaZv2Jl0CKXK06TpgxG22aE/1
-# 5n+90R0IMR4p5c8aNEF5J4UHgCY7x9XucOz6Si9ktktZPZzAegtMyVmI8F3dZzLQ
-# W3yrefZUisewMJG7bL+KTX5FbLxghKty/aiYqBZQW7xtnzS5SQAynmg0JhjBYmaE
-# 6IBk1nkmjH6+dIXjXyDy/NjVvDsK/7DC/QiazbumDut6GFz5KybQEimAZUtFCLqv
-# IBw9k0SrRjodg4DimhN6pO3OsVlMJs6dGctKSVByvWoCO9rnxT8x8SOpHQTqqNIL
-# i/b7IA9RP58G11KqutVUX+/ifKAgXkw8mmdapiIDqrLLLgTAD2yrsCMN2PV+S2uG
-# PyMlG1PWTkUJ0sTsErvp8ZYzaJaZO3hEnrVsefqlgFBjF1vjvnMkRmMEo4PtapyY
-# w4B5+6Elb0lcSd0=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMTQzMjZaMD8GCSqGSIb3
+# DQEJBDEyBDC2NOt+xl+0tYSr3GDd78/TRLOLgwwCvQBE8rn+eQSqoQRjQ6nLOboc
+# Es/KHIqZIGcwDQYJKoZIhvcNAQEBBQAEggIAokkjBswEXzKOc0H480/vOe/v5hma
+# B5VwQno5ZdPCJVPZL5DJK7WwXCs+zbPdzqW/SM4ifhm88nGBwi1lNgMMba+pVf0r
+# XelcDr4T+rY8oijiSHRosIeAARLKnMlAJjHBn9lexQoxdulwipNjfrvacChxdcq1
+# ncAoQGJpAtY+P7mHSM3IpyeTdeCVt9WTY6rn+m0EFieIaugw4faVW2nxRs82C/HK
+# IjdgXt2XuJvvkBAaCmZVM3kCELJKe93E0qiFJiZ4qRNU0A6Gh0CYhbmG1DUcaliN
+# +YZeaS8tcxY5D9bJxSfVVvfixy0L4+/JH4NRKNQVdnLXGoEy4evgb/9UPjGr3Pjj
+# iW8jq8eEnUBRyMm00nXcxCOM6VeOWptnFDG6ZwtE6owGIMe68P+7m1vnQQF1lYpE
+# +JaZbZNuXmed5q5YP645/t5jayu7pHvGkQUeleTfRzi/NRzbnc9QHYNCpt6n9Vho
+# 0CZPCpXwAuyIiTxksemBre71djjWzrNuyhfmVY3m7OaL3FN8T0Yn8EOY+LHsNP1g
+# v2zPw1KRlpA8XrXSW9GUL66as17pubGo9kkmpzRIXXBBAjAHLg6Px2fDRBTCKju2
+# ePC15I4ix2LMuxByb88Ji8XxAC+dNEY5/Gf87RYjarhEHHJzPkbXyrJHhEIxe9ZP
+# 0uWUyUpO7vpJGRE=
 # SIG # End signature block

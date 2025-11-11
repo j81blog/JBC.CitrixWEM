@@ -74,8 +74,7 @@ function Connect-WEMApi {
         [Parameter(Mandatory = $false, ParameterSetName = 'ApiCredentials')]
         [Parameter(Mandatory = $false, ParameterSetName = 'Sdk')]
         [Parameter(Mandatory = $false, ParameterSetName = 'OnPremCredential')]
-        [Alias('Quiet, Q')]
-        [switch]$Silent,
+        [switch]$PassThru,
 
         [Parameter(Mandatory = $true, ParameterSetName = 'OnPremCredential')]
         [System.Management.Automation.PSCredential]
@@ -210,14 +209,20 @@ function Connect-WEMApi {
             Write-Verbose "Could not set active WEM AD Domain: $($_.Exception.Message)"
             Write-Warning "No active WEM AD Domain has been set. Please use Set-WEMActiveDomain to set one."
         }
-        Write-Information -MessageData "Connected to WEM. You can use Set-WemActiveConfigurationSite to set the active Configuration Set."
+        if ($Script:WEMModuleConfig.Config.ShowWEMApiInfo -ne $false) {
+            Write-InformationColored -Message "`r`nTo make changes to a configuration set, make sure you select one using" -ForegroundColor "White"
+            Write-InformationColored -Message "Set-WEMActiveConfigurationSite -Id <Configuration Set ID>" -ForegroundColor "Cyan"
+            Write-InformationColored -Message "`r`nYou can view all available configuration sets by running:" -ForegroundColor "White"
+            Write-InformationColored -Message "Get-WemConfigurationSite." -ForegroundColor "Cyan"
+            Write-InformationColored -Message "`r`nNOTE: To suppress this message in the future run: Set-WEMModuleConfiguration -ShowWEMApiInfo `$false`r`n" -ForegroundColor "Yellow"
+        }
     } catch {
         Write-Error "Failed to connect to WEM API. Details: $($_.Exception.Message)"
         throw
     } finally {
         if (-not $IsConnected) {
             Write-Warning "Connection to WEM API was not established."
-        } elseif ($Silent.IsPresent -eq $false) {
+        } elseif ($PassThru.IsPresent -eq $true) {
             $output = @{
                 Message     = "Successfully connected to Citrix WEM Cloud API."
                 IsOnPrem    = $LocalConnection.IsOnPrem
@@ -241,8 +246,8 @@ function Connect-WEMApi {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCD/Pa0oice8/EmC
-# tB93fYacSLfPqvs2Zpgmi5I6OZ6OjaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCOqQtOVzSI46z7
+# g2UUPW00IrI5OIVxhl8955ZBUyT+rKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -418,31 +423,31 @@ function Connect-WEMApi {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBptGKQ4psYufbAFFXz74aNqtfSQ5kURroZ9c72241x
-# vTANBgkqhkiG9w0BAQEFAASCAYAxpKzXmqgv1ZkcfZ4nvUakyoSEOOL437IeGlw3
-# avOV2HgxgVTs9OWV7USPvaQJAkUscGjhXTOJPuZZ+0uSzSBHIwm4kX2SVfk0/9uA
-# GBSWhleDz/WreLb99Hp+Eg0QXnanBO7AwFpW7iEUA71/hJKNGrHmkucIO1LOJvf5
-# 0nRbieT1B8Kxsv0r3F8lpb+NKVRGZMz40bbesJTBU4ucc0Nyx0egOZ6G7/7n3vhX
-# ulAiIbenmZu8FMDeRH++v77PDNoEeSAQNkKv+7+hqujyDgug5alWIZq6IgIR2LtI
-# qyOfB+EEt7vW9NRzea4CZc14RyPRPd0fZtv1xrvfnXW1+kWS2AH4j8q2sAe3c344
-# 0zapUvrGBOt4U+IiVIDvZ+yZUwt+/iBfzqf4Yeb0L18tftx+seZUKzTv+Blq2KFM
-# xceszACqBqmCToebzIvvzL3e74m5doJJpSqjLbMBqdfm/5Rh9n/p0K4N0yJCWQJd
-# sHYTMA/pJjsVgyH20RHV207YsHahggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBmBffRdYWKWu45hZm0YbMJWFns2Tvs0kJIvcLnbFE9
+# 1TANBgkqhkiG9w0BAQEFAASCAYAnbDCMOlOXRLMpx/JnOLAdiFkSGm5hhYwGb2DK
+# Ez7fBVNOQkdvRWg4k1AYHFSlZWNWz1n+J+YpqCOrtomi2cn7KbQ8sjVdfN0H8UDm
+# i57liPuScp3WFOyf2GqlohP2iDXXxRulrmRHHcsZJW7CXNdIYA8UPtkxkinP7dwU
+# iu/xY1ujfeVG4TBxu4lmbWvb8b3JGpGVCM4QBdT9vN4RYOv8cPgg64vFxjCbR3ap
+# GM341bYzzsj+zvuWSfsFL8+qQzvq3mEdP9ae4gFkDnC/xr2anVA+j7aStfZeBGzz
+# ius64zeNfhzTW3fUu7hqkNxyimpCgkCb12ThWcBOJSqK6Zn57hNJXwwqrhuUgrpU
+# DXtRg6b280BanAw+lo0w0DSF5PxFdRcybv56Ic6fNwdqbrh38Iafcv8k7EFR/vBm
+# P4x3+fdjaKnn2eGOP0rGqirGKfpQ/D95zVAcDmTBVguR4qpQjlUbwAhWFtUKFsuD
+# 9a2vFZl13TrEJYMCYG0AiJ2sZ6ihggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU2MTlaMD8GCSqGSIb3
-# DQEJBDEyBDDfNVq5e8xDVn1CnNbFYoHqov+Mb4eLnYG9AhEuXv3NWPFtiLsZ01LK
-# mCdOiD39kVYwDQYJKoZIhvcNAQEBBQAEggIAOXREac5VFrJNaVU11B/6MFOPVkdX
-# XXJEG9vfQ7SdI8UW75oFE3GYqL+Dt5dFZXb/OO89i4FgFYDKYdVj7T+KdyzHGV8v
-# ZXRXExImVXHKYXSDOVpMZGjUcH2r3ubA3LoyBrlh9Zd14IUHgQ0FL/Nyp1J8woEC
-# Z4irB5zECb+eG08F3Unhu33fT1YFbhnwUcZal23caaxpBdcZ3vsTZcJzxt90g5Hr
-# 1msQu6Cjjvlg2GgBi3517Wrtnwx7mtXwS67WqyS1iCJfPyOkO4+QaZKgjRJcP0Bv
-# Ey5so8GHh0w7BL3VWcKWKvzcDQfQ4dGUMLk+NRwOeybYbjBOBlp25lvr0QpB70Oi
-# BBCwesG0yt5kt1AO924HKqTAyOvCebklU3Y/Z4Pb1V5C4H8edAbgrxv4ZQ9OGUg2
-# Ogu7X6/wvr6b+MCPUjfzsYQgZbcj7Gw3EQGKSb4tNqs8UhYYfEBnODbskLTibPXm
-# 6rqPZsgXcRIOI27iRb3luPRaArEbMptITvzma8AB1C1/ok1OMlkYlbtO8X85ZgPR
-# GsIFKOIOJJYKMTgVs0fM8xCHBrh0hYr9Tuu6f95iXIBQ/iU0/2zmbHNl87BY2dJq
-# M6t9qAX3Hgrdl5rhr4Pc893c/SCuOzzGku+XjakUn2tN4YIQr+HGz3c4eLDgb2Ls
-# xtjsDC8tIblbSIU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMTQzMThaMD8GCSqGSIb3
+# DQEJBDEyBDBUTx5J/Jyta30U32lUdHdSCdGgzG3iXJIkZiz9m9EoeUlCP6TiCExx
+# 8ljIhtwnKjUwDQYJKoZIhvcNAQEBBQAEggIAwLe/vWkgiKgdjHu0B9AtxGv099xN
+# r50RrpvggMhvrpaqFsxG2HFE3EAlXsCrhrTuVEUNALRqTKNWW+ZjrLDtz6EEpWfW
+# yObSGIAQsg5X+tNftPW2ExTs+Ja+9s8GVgBMorgx/j2HBp71yoQg9jXHizj5F03f
+# IjLk5TN4kgwb/vNLIHU4Y8ATe6m3aUG+ttGQowZ0foLyEEt6OHDscw2lxpV3UDtS
+# Xn8s/lgJY0Bj72cWge0tPWtw6UoN2pN6nY4mPFW0gHYBOdoOxvxGrpZk0uCRTQ2R
+# wic+HrgBG+dMhNNO5SwZi/k/S4djN0f1jdh/yJT72kP/Z9STl07R4Nz7wAMSLGBV
+# hxjYXD3xCVTSuVetMDCD7IZiFqHAvrO8jTFlEN9hZ7Kgw9MeohrcKqPtJ3WbIXRE
+# K2sOHSrz5mtp133CcIcNa0Bh3+Vxi0Dw4t7e0HF496X2lHsAp/W6lBM4ArXxRvCK
+# r1w8MujSoLlxziJBbA0iWW7enIzVshE/UIc2S4PHOtvv9GxbS676bAbpMcCa9nhQ
+# ajHoPp6PyRHFW27H7dgeHfmMQuGHcGtaY1Qrxmti+LSMhqf3QemrpABLYMYWPKX5
+# xCXASEEuIn5sMDJXuoeTFlTbwJUb/TFtYl3r0butqRm9BD94LWdXXGAoXYrY4mbg
+# EM3ZeZ/QRVoIjhk=
 # SIG # End signature block

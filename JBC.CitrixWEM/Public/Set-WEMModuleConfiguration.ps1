@@ -6,11 +6,11 @@ function Set-WEMModuleConfiguration {
     This function allows you to set various configuration options for the WEM module.
     .PARAMETER ShowModuleInfo
     If specified, the module information will be displayed.
-    .PARAMETER ShowConnectApiInfo
-    If specified, the Connect API information will be displayed.
+    .PARAMETER ShowWEMApiInfo
+    If specified, the WEM API information will be displayed.
     .EXAMPLE
-    Set-WEMModuleConfiguration -ShowModuleInfo $false -ShowConnectApiInfo $false
-    Sets both options to not show module and Connect API information.
+    Set-WEMModuleConfiguration -ShowModuleInfo $false -ShowWEMApiInfo $false
+    Sets both options to not show module and WEM API information.
     .NOTES
     Author: John Billekens Consultancy
     Date: 16-09-2025
@@ -28,17 +28,17 @@ function Set-WEMModuleConfiguration {
         Write-Verbose -Message "Setting ShowModuleInfo to $ShowModuleInfo"
         Update-WEMModuleConfigSetting -SettingName "ShowModuleInfo" -SettingValue $ShowModuleInfo
     }
-    if ($PSBoundParameters.ContainsKey('ShowConnectApiInfo')) {
-        Write-Verbose -Message "Setting ShowConnectApiInfo to $ShowConnectApiInfo"
-        Update-WEMModuleConfigSetting -SettingName "ShowConnectApiInfo" -SettingValue $ShowConnectApiInfo
+    if ($PSBoundParameters.ContainsKey('ShowWEMApiInfo')) {
+        Write-Verbose -Message "Setting ShowWEMApiInfo to $ShowWEMApiInfo"
+        Update-WEMModuleConfigSetting -SettingName "ShowWEMApiInfo" -SettingValue $ShowWEMApiInfo
     }
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCXqfvIAMtb+kzd
-# yslQ9ksL2IkEULUMQouhPbb8QoBgvKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBmCC0F+dDNKwFD
+# iPR6J3H5WZie59XIgPakjJo+aRU1H6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -214,31 +214,31 @@ function Set-WEMModuleConfiguration {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCD5rC3X1YFrAxLhYtVUrXvG5lCs/Dz7OyGSDx0C6W2M
-# gjANBgkqhkiG9w0BAQEFAASCAYCmGJecKZtr0sdDTyPJkbqn+ztLzi1UHrQvWx3J
-# leuYwu/wiTryD5S28gQPhLOITdRELkK5m9KhUlhpRyehb5nfxYeooKe24CHXab1u
-# woH8g9BueHsz6igkcxrDNsA7l4aAeNdpAwT20PlbnFDF1llTZgYfXaGQy7gcuW1W
-# 8l3td1+k3gI+e4rOeLccbf2zkYxstZOUJaYkb0DIGAWuOGjPTI2ZW6vOxVFUJWP5
-# Iu9ugep8WndtsnD0oSoFZL060imzswa2CbYZq1cdskkCAJYkx44Stu0eIN0Ao97c
-# c7wBBnGEQBiqnsJAoa7fZLuGy21Mp60EhHaYg0tQY8eBlnp4xxb6zGuieADC6bA3
-# goia0l/kifg9ySYJkxmk/uHpcwuG7kre/WxfcQj/WgJGF6BgWEYzSN/V5SejkZKC
-# bhkNglNl4iCBZbgtbCyjxQ9RDOLF1ATbJ9W6ZPuDxJx149/HOsTaRm+sAwQyJBjD
-# oRsCfpKEysC+ExB79sUHQU+lKmGhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCC5DDd4EZKEvPkHNM2Wgz+WyD9xtK/zl8Fm4YG0gyoj
+# BDANBgkqhkiG9w0BAQEFAASCAYB04exIQN5XSg0MhyafOyI3l57avZEftUc0Vxk0
+# DiwzadImKNZuukGhlOYJ+3AkXpKZYnxuGwQti/3WcBbdbTpTkYarW3x6lZYOLe3m
+# APuokrf1x5ZmrwFlwvM7jrGLk8v/3AwcXakZGOr+G4XFzJtHRiinAWvAn6MfYVXV
+# xFB1DafrnPg9XFEBni0vkYJ7FmmptdLa/UrLyLs7biw9Ob5bypriF6/a/p1H+bpb
+# a+8wQrFekwmSXE1B7eestof3gCr6XPXrshRe700g6ZmJm91n9QiNo3dchVq32peB
+# iTCe399Q62TJqdyS5MVN47MIDHADWnrxLm4/45h/N7kiZG8oUgLOzbrkmvQq2Foc
+# SZq4K5cAHcTrHiZPP/WBAT6BN9T9wne8X2d/6+O87eyv5jFXhvQM+87tiN6pBm7s
+# zuU8onKk/nz8OZ1gQ5vjPLsezb0sYuYArBk0hHEr0Vo4l0YEt8Ao5PtIVLdkYtu0
+# XjHoDAyXbJHKgyhKUNCjBVm2Z8qhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU5MzhaMD8GCSqGSIb3
-# DQEJBDEyBDAknpPHl+frk73J+tqDlVFxddR/s1TD9b02F+ETqleh5An42V4EMhLQ
-# aqkt577lChwwDQYJKoZIhvcNAQEBBQAEggIAkj5gG8u5uwwLvuQlosPaz7jQT9/D
-# tino/gUscKexCq6i33Yj/vgp6I30MSqnqoNhIuSTpzzbRy2LszEMJF7/gXCElhEk
-# r4ll66AbyzfqABLCg9mdsZfuGtT66towVPs4LMtlOM3pbBbhrgYSYcZqzB+GtUTu
-# ky01airJOCz3qIMLyAmcO1YdMw+vmVPb4nldoWYEDoWwuJJIXaRPTAQPx4IEQJCP
-# o0ppFzBmF5CJrXIvBi0Saz+tjkyx+YVbwg2gwL9/XKR3xQBPLHZejUpivsiZfdpo
-# Fqxn5k4mjEbaecUoaEtHhDuTQgLmfVK0EMxsEYNRiHdxyFKloaOFoD1l4GgAhaSo
-# aoDBLWbkAyc6Fmpicx3r+TyyQaHgp5NK9rww7z3zDzNMidAmpFo0zTTR99oKuzH4
-# cRhMa55Qr/yXo/nokU2tHrz2eY7LtjUGm0i3fctPzXyIkakF42yzzh1vV+yoeCtt
-# ZryH2Jh69127WcfC9D4a0FlEAvliu9IbIV17q9aA4knLeCMY9jD6iP02TjV0RuHi
-# rcOJtFaQUMoG+pyHlHaaYeBsAW1hVxn7nXVEu25CKtvMJ+AT9VEfv3PA50yVCxeZ
-# gAVQO6m2y2efzZ6fVgrqSIJ5CprMmym66cr4vyOSTuIZcbL1J4UMU7FBeGtzbtjP
-# Gm4NmT6BNOCJjG8=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMTMzMjVaMD8GCSqGSIb3
+# DQEJBDEyBDCeyqsYpUuj4/KisnyeiYXV/rI9FSvCJxyn+UCbNMfMfB7o8MRtyXLd
+# bV0ewkDretMwDQYJKoZIhvcNAQEBBQAEggIAESDvUvYsgPVvzfjxGah3ttaJ6sap
+# FxrN3dM45AUwBSGnlNdIwdwSKnna54J1tC0gBV8pbGNxDQu942bNC2DYhrJPEgsz
+# kWxw3XFOE80hNslMy1Zq3avoPAVfxZt03aS935qBqarjEUiqpuTleq3JIZ7yaAsi
+# TcabW1XTA1BB3efTM2ROPWEj02e9r9hDI0u6ut0/RAlfQdJsbVrZzzBQJ5HV5r9a
+# vddDsvZjvEEr/KLrqpn/5iNWuru68KsihHqG2YzJ3/N+TxLMgQMi8gn9hhoxBD0V
+# BMlzzZGp4tnt54NXXajt75DLiHVczSBATqkKCbA5891pl+eu2cjjy8cVQ+dDU5eH
+# aLHr0U7kT+4sH/RQ8DFHyVfZGiNDbMecLEgbFRtIfJd7LNiRq6wUCCON6td6LUjR
+# OtDLXxGTaMWAHhD+Jb12Rq1adMP78E9hmd+7ZT55bF/euysV8u2NJbFNO3C8D2e3
+# lHRLAjCJPvz9NNbswDP0EjPibL7jFIMFWcg2g/CrlirtRnMBZGeJhzbzDKl8wZ/K
+# ulQ/rtO6bLyfqC9DqECGFYUetPmDgLElzaDUa/EQ7WGhwRwy3HG/ga/cOKjBeUza
+# zmfWud3QzQiNFWLY2POYGEkzBWsjBEOIG629QNgOb79pFZIAPF2sLhUl60OHGNLm
+# MqcFjZ7J/JJbWQU=
 # SIG # End signature block
