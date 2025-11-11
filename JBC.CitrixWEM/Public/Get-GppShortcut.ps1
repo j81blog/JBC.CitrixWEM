@@ -252,9 +252,9 @@ function Get-GppShortcut {
                                     $IconIndex = 0
                                 }
                             }
-                            if ($IconPath -and (Test-Path -Path $IconPath -ErrorAction SilentlyContinue)) {
+                            if (-Not [string]::IsNullOrEmpty($IconPath) -and (Test-Path -Path $IconPath -ErrorAction SilentlyContinue)) {
                                 try {
-                                $IconStream = Export-FileIcon -FilePath $IconPath -Index $IconIndex -Size 32 -AsBase64 -ErrorAction Stop
+                                    $IconStream = Export-FileIcon -FilePath $IconPath -Index $IconIndex -Size 32 -AsBase64 -ErrorAction Stop
                                 } catch {
                                     Write-Warning "Shortcut: `"$($Shortcut.name)`", Failed to export icon from path:`r`n         '$IconPath'`r`n         With index: $IconIndex.`r`n         Error: $($_.Exception.Message)`r`n         Using default icon stream."
                                     $IconStream = "$IconStreamDefault"
@@ -385,8 +385,8 @@ function Get-GppShortcut {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCB7OnIpo2kXKfRp
-# eWpjKAU9hhfaTE5tlbLEnrXqsAuLC6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCATVUhAakQagnEw
+# m+S8/IJyXqPUMG/h4YiuYPPD3DyVk6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -562,31 +562,31 @@ function Get-GppShortcut {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDkTpzOUeRCazV+Guvxn7s8k0r7LeGSBASwgOcc7dKl
-# VjANBgkqhkiG9w0BAQEFAASCAYCfvlkF6QaW+PHf7+rNaHLykLC1Xtt5l24E57R8
-# CHwTBn9U3SBYowRdO8M9udS15Gv0hCOe55Vd7CjNFBtchyZrm5N4IU9xKGyi/CHt
-# dV9qM5nAJClVsj418iGtj+OaKyyFC+fhOp9bnzyF9sjX0ym6/5+MAiz+WWDviper
-# eMBBvjdcuB2Jyn2LMyP2NvhFpUwiuxmMjGAnbdQKHYYgFrRN4QTSeWEOgQnq7j5N
-# 3Z0aXJSLbawQ1CSPiUTp4mcdSGwZF9bh5eJt/MWLNo4RTXvTnf5tmPqE52ylRuDd
-# BEw4uFkyPF1d1srjQsSwY3UCAMKWXvqVBBtsdJwKHXBTAjHFAzkpiiIIzXHXqQ4m
-# /zKcDaHEAWPHVPChfklSeEs0vxuZwxNrwG7L6WQjRM7QBmCjvO1EH0GSqpWAEZ0n
-# qBELl547BRGHLr/TVl9xttaN+cADN7gw1v1wMyYredtztEw3/u4yuv8z0Wc2VprI
-# O5BkforjPZYcv50GrpG+DVug1iChggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCCpm+SFextMCifxREfgYPDaZrggzHxsZJ4YuMlDiQX0
+# WzANBgkqhkiG9w0BAQEFAASCAYCwqhxQF5wq3+pUJ+uDfqld+/2/RdMfh/S7yOvv
+# qk2dyqfVYbS4VJoqtpZ2OQfH9Fy9NbtNf/kUvLBgTrO4NJUjMf25YqL4W2pzEK79
+# LiJb4rQjakDlWGFlsH1IQbu0XlIPNU3IVSrUs0DirkPh8Hjxd02PhNEIPb5Bzp7v
+# Y7TlR+O1EBzTPIGqKQkRHNCFoJldn3n4eMkGdWwSi4PzRAkFnFxxEwQ7E2frSVvS
+# 1xzod0pSLH748O+P67o9LWZoAlIDDVcJSRFK1OktE38D4UNzIs0YMgPRrWXF3uzq
+# 9YJU6Xj0hlPeZ27oimvoJ8fXBlyOrbzHe3KYYWfiO9tweR8xCDJnvB+unqzsFsel
+# jQ4MJuOWWe6CXOCFWRfxMUZ+QTuQ7Kb5aYnZREwN4Mcp+N+Bd9G2x7gxO/l5VNdK
+# yaiDRLr4cT3hpXYkFUVpaRAW3mRYnyJvotzk1Dbcwrk8XszLrFE7Q7gfbZpD/+Vl
+# KsheWooPBBNj+KCUAkQegqXrta+hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMTUzMjlaMD8GCSqGSIb3
-# DQEJBDEyBDCmjZseucel3iODEv+UQ/btZ6RzPR/WVsF4/P6PzBbN/32YNwxHeOi3
-# 6pqpD6dgeMgwDQYJKoZIhvcNAQEBBQAEggIAQMUIOji6ZOSmeoz4sx1PzP8lE+V7
-# kk4HBCJaGCG2893b+yvocZxvi0GrfpBXqd1l5w0A/EKjEZMROQNmZtsi4YVmv6Ii
-# UnjZkY8jOmuaqLGs7F/C5eQPEYD4p2u26EdpkmBriT5mtRobXIM/l/YHGvYIfqQ4
-# h+2eKPKzY5GpW+XNThIGBpVDecVgkXFPmVpfFqlwyvQmLgHyNvO+eiLjv9FAE3mp
-# DZYPcyJhzxUbBksVWxstpBr0coawMqAx9BwBUMvG5651XNkZ2bpCccSVL37B2GTN
-# wVgmkYofhbDNcCEhPYDVktWtvrENEDbMelU6OLMiJmQaTzxsZnLQlr72k+1t5L8b
-# 0eXtlpxxcVCYfustBqBypUUrDt7dAA8XJH48L5SPuvMe2VHI2EpmJcFl7Yzem/4t
-# uulGUWLQFWEpox+8gdAQOG+siInQRGa8EYOyJBLljJumROcgNYvBdVaL6sjkYVpU
-# bCuY7F1AJAVzAxDv3Y1wxskCIxU6FIM7NUBssoauQEPxbCYhQvpNAkCDnh0+RSZv
-# KmW+g02+y0xFFzicCtlpusrvbU09NV+6F7UFTfDAvjEzs276DoQpvNWNoAJN7NXa
-# l8NSqIxe0N7vLDoI58kZv/PRu/stDJBhXQFCr0wLM+0YB/papPyR78FIy43z43bA
-# cLHR2gssgi5R9I0=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMjE4MjRaMD8GCSqGSIb3
+# DQEJBDEyBDAdRY9O5TGnmoC/EwCi7Ei9HDlI9f66nLPSXqsp9abpQTEsqqWn1asN
+# In0Mdi5hDdIwDQYJKoZIhvcNAQEBBQAEggIALt2kKj0GgMyszgJLyBHVpmSJ+FpT
+# QfINWH2C9e1TXlihaMYJDR0lNcSStGtz9r1EmTHyG5suUlilQ6pfef6x4OLsIvym
+# 0JuDTVfo5I5n5BAglJ2FUXLW6wL7tCQOyycbxFsdsmPDXgoM4wnZR6m0w1q9ZwCP
+# Ktn0DtnT4ILY6ttuNeVBGUU3kNqvewfurrfGCzsGctNQttPTGNB8sYn9FZUNA8ph
+# 3LC+8h6VPXRfPGNdy2GdofLprs5NZF5HK+rEXnU1e1/P2JslOvqarVjuHYNDqebm
+# j0wmVlI5IAwtc2F1l1bD2B8OQ+RTVDyMMySAFGdL2+zzeC4SW+eZtavgEmhi3ACG
+# IIzU+YTqRIPqTOm9MOp+0DRVw6sqFCpTela+ZO0Fj/eYcR+m0leTgjDwmlK0jjS6
+# WTjf+uIxMDj61HRZJzLc8RBkmoIomDQX22AuKVnAiaSUUgo9s6iXwEdWd7BsnR6b
+# O8fqS3WSugtdX25ZrbjqNVsJqeF3I4+3aS2/PxoCAO8P/Yn/g6PVUs2u+cAo/DWH
+# CH7T+ahsWoBGxTNqlLBwfV5s7XtTRcseOh/RWqwk9ieB4LSkbiMxYRnasC+Kcihd
+# Kax+jTfAQDc/XNgX2mHspZ+wbstfhQfkImgJLf2KGRWzReNguIYcmr9TBbxcP2Qb
+# xrT3t4t3/3o235M=
 # SIG # End signature block
