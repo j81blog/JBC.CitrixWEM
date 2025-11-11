@@ -1,5 +1,5 @@
 function Get-IconInfo {
-<#
+    <#
     .SYNOPSIS
         Enumerates all icon resources within a specified executable or DLL file.
 
@@ -54,11 +54,11 @@ function Get-IconInfo {
             Position = 0
         )]
         [ValidateScript({
-            if (-not (Test-Path -Path $_ -PathType Leaf)) {
-                throw "File not found at path: $_"
-            }
-            return $true
-        })]
+                if (-not (Test-Path -Path $_ -PathType Leaf)) {
+                    throw "File not found at path: $_"
+                }
+                return $true
+            })]
         [string]
         $FilePath
     )
@@ -134,8 +134,7 @@ namespace Win32 {
             # If the high-order word is zero, it's an integer ID. Otherwise, it's a pointer to a string.
             if (($LpszName.ToInt64() -band 0xFFFF0000) -ne 0) {
                 $Name = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($LpszName)
-            }
-            else {
+            } else {
                 # Format integer IDs with a '#' prefix, which is a common convention.
                 $Name = "#$($LpszName.ToInt32())"
             }
@@ -145,9 +144,9 @@ namespace Win32 {
             $iconId = if ($isInteger) { $LpszName.ToInt32() } else { -1 }
 
             $IconResources.Add([PSCustomObject]@{
-                    Index = $IconResources.Count
-                    Name  = $Name
-                    IsInteger = $isInteger
+                    Index      = $IconResources.Count
+                    Name       = $Name
+                    IsInteger  = $isInteger
                     ResourceId = $iconId
                 }) | Out-Null
 
@@ -182,13 +181,11 @@ namespace Win32 {
                 # This is not a critical failure.
                 if ($LastError -ne 1813) {
                     Write-Warning "EnumResourceNames failed for '$($ResolvedPath)'. Win32 Error Code: $($LastError)"
-                }
-                else {
+                } else {
                     Write-Verbose "No icon resources found in '$($ResolvedPath)'."
                 }
             }
-        }
-        finally {
+        } finally {
             # Always ensure the library handle is freed to prevent resource leaks.
             if ($HModule -ne [IntPtr]::Zero) {
                 [Win32.NativeMethods]::FreeLibrary($HModule) | Out-Null
@@ -196,15 +193,15 @@ namespace Win32 {
         }
 
         # Output the collected objects to the pipeline.
-        $IconResources
+        Write-Output $IconResources
     }
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCC3S/WuFPhrcKQa
-# XjEcL70tiCLPejYp2/Fx/5YAY7g2u6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBVaiDJzgNvllEo
+# s/Lgn3ODcW1r3hckxLsD/gB90KphDKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -380,31 +377,31 @@ namespace Win32 {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBBPZM4P5ittuzGxM7VbKTFqK+sGvw8Srf03hKOrioR
-# qTANBgkqhkiG9w0BAQEFAASCAYBaX4HKTCVCDDVWib4IhPvk7PpI3LO7rXx41TOu
-# IOsnmE5RGsGb/0J5hBHMh9R6YE0ZUiEOcCjkeNqR9EDrj8lmwdKexrTvJnzEATBL
-# zsuc/PAEqMjFRUABj1074a/OluVrfi0HCOI8qSfnyGGLKyoSdmKOFRZrsGSX6LKw
-# 4VxB7Mp8umlo793/9LZIG6i7vScGt6+VsfDrB461pI25Bahmc+m0YoAFxmm/tuR3
-# hjFfAbmlUbgoBT3AVK2e91cN7YLWkeuTCsfTYAtKHc2PnMrLiNmFt1L4KlPuxwMa
-# t0k1Dpt3qDzAeN7aAFSA/Us8pljBROUvuebPGXw4qNE/uyyV5QQJ/wHr9ND7RQXt
-# gjKJ3wHW8hUfib2aauqQ7SAaxS+p0jbU4c1DGK9xF3h0DL9tMKFbmNLywWXX+Ush
-# fUykXADZ5q7dBz+luzQnR+4NxfOHFhY65pitOVcU6u08pMtR3YMA8yIcIpXUFBYg
-# g6ytV2tVyVSeM6Ax+jFrHm6AOEGhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCAZ3fTwh207HdhTByPRsj3vwQaYoU56RFUvCNOYVNGS
+# dTANBgkqhkiG9w0BAQEFAASCAYC7vBmwGY6xbAo0VjxLsHwNTlu3ms/J2KFA8MYg
+# i7TAeyBgnsz6LxHmOgqXYinjxxyo1/u3B7qDCZ7KBd6yX7ekKi11tNb/2T5TaRN9
+# nP92AWRmJy82n3rQV8eDhFVk4WA/m13ZJWP/lKJTNNf/JZjqNh8bOBGZWxfrSnSq
+# /U/iUSdzzzRpGIuCUI59HHw+uZHpec16HeuMUJsQVmFnMO3NomZPIPiqJBnRq8wu
+# lHXpDSLkLSjof+M5oPgw0d8WNbGcNRu9rqWhvjIqz3cw3vcQ5xFbBBoMNU9Kxzvd
+# xTdAuOwXhT/oGmjOpN/GYSUoUBn9hhomKnhVEHpuCDWGrgqqPUgTmrC474DxOoVm
+# CWTslH2FpIc+9NVnyfYZ3eBxz9NmAydoTE/ocZWLJKbZtQDRikjVR24btJaqxj9k
+# NAkQOwpTCPXtsudDraDqG/Qpxtc20QChpfCS6DPOf/2uKUSpLRUl/2mHjGAEN4YR
+# KdV4jYNzID44XvReilElYt8XIkWhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU2MzRaMD8GCSqGSIb3
-# DQEJBDEyBDANtNLTuHh+y2tqK11k1Xk8krqFmMQemUDEGQ/51XJlFvllzw+Wd9wx
-# mWtB0LdFL9swDQYJKoZIhvcNAQEBBQAEggIASMq9phIbpUz3AeNKMm9yhZzzwnkw
-# NIRUXbyrhiDHZt45FMcyB07L0knE3KEMdq8OYCyE0FB8aJb5/1sdSK4MuzA3EQR7
-# OG493XgWBfk8/1sEufqpjx+LgoeZ/beRGkK0WKZnJLi1AEphNlSG6TYBLx2TQtcb
-# KGWakk2PeLydD7187eFQmwsPP4pE8EmOuacoF/o9WAYWezt2CBe8Ss7NQOx3S3v7
-# ImeM5nnsn4InCyo6japfULb9iuxhLbBVuYHVGi+xA6ilR5GkSnh3/ZVTHoPpFHj5
-# EKhKZfm/5CN+CoxX5f6vfe1p76JUIxchv5Fu54JRf3ovWvwf3ulsqUbNOYkIsWrL
-# 3xuzL5DOXYOKoIG6wIcDoSyC1Rve5xDFMFEAPtak5a1bPNQUYb21ZSAHc56KVxNn
-# cUNzYBpD89vvnBmJ44wcrlC/n00nIlx+mMc4N7UxalFJSuLO2u/7MjtLWnGPTjEE
-# kVkC3f8RoRMjq0SGEGOoYrrAB6/pgWm7SBD+Fc/WRhvnNtOQzAeHJPTbVSMswmGr
-# 6YKYuwr/uuzRAI7he1YKIVnIxn/Xw72lp4NIr/f+dDi/WQnPHnWDNLnmIXhgOpp2
-# mrqHTgH8r48633YIGfXGrLFehk4tP9qxQ9cS1PgEJtMsNjBCI/FExRwVKBHPPtjD
-# pAntRFHKqUq1ZTo=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTExMDQ1MjBaMD8GCSqGSIb3
+# DQEJBDEyBDAVVS27JiWdBXIcvoIj9Md3epH+AuAwdqfKosvOp1C51MYie/RX6app
+# Z/xz+YTqm+4wDQYJKoZIhvcNAQEBBQAEggIAwHT3klmguxxkbBbg4AI0/vlw8gUf
+# /cYpRQaRlR7HkAJtoTePEGAGCuvrE2t/XKmWXOGqi7gLGIdDzpU0uS8AvqGUUTsf
+# omJBDuEfmMDGG6uBKB4dqqjJIOU2OIVGI8sZmkXhIf6aIHBXCaOu2C+z6mkhrBTK
+# CUDqrkscPlbj98kL3+Q86MMK05BE7PGSLY2WvvdCus34Flp9cRAACvwV8UwkYiJH
+# 5/p3wL+8jnpYoLQjdWcBJc7EzqJK+9MSGsBWTi9oMvPR4tqYzigVTfGnjLB/SrpT
+# CxCjKej8oUlbrBd348WZbKELpA+WD0fgbAVaOog/oYpPuFlr4QFtVvEblzUmud1h
+# rDAPbD06uEOw2kzJf84gtNGQvDwp+klZpmAs5FmWFkuMkH0wdwIRat/nEtewoOSA
+# WgJ2Vk13aZw/txp7wbtPiKHPPBgFMkjqoo699QcAbXfuXeP7GcQhhREUEhnQ5Ftz
+# QRhGbID/tBCUc1JrvLreWhhg4l9H7fiL0TrwbcjeYs52F8WiUzmGXclMjVPAYaEJ
+# KuOT5oVRoumzpEm7VcFTDfCvzF8M2SPqWgLIcRrAvzasYgvRmaceT2IdnOJFkQWF
+# l+/Bk45OyWXzQZXLoYqxa2N/KwcOweMfW0RkkDhqGTNLIX2WeR1TbFkVVhM7cSc5
+# KBK2QwpCSjTHNXg=
 # SIG # End signature block
