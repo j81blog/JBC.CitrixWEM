@@ -1,47 +1,70 @@
-function Get-WEMExternalServiceSetting {
+function Get-DateTimeVersionString {
     <#
     .SYNOPSIS
-        Retrieves the external service settings from WEM.
+        Generates a version string from a datetime rounded to the nearest 15-minute interval.
     .DESCRIPTION
-        This function retrieves settings related to external services, such as the Citrix DaaS (formerly CVAD)
-        and Microsoft SCCM integration. It works for both Cloud and On-Premises connections.
-        Requires an active session established by Connect-WemApi.
+        This private helper function converts a datetime value into a version string format
+        (yyyy.MMdd.HHmm) with the time rounded up to the nearest 15-minute interval (00, 15, 30, 45).
+        When minutes are between 46-59, the time rounds to the next hour, and if that crosses midnight,
+        the date increments accordingly.
+    .PARAMETER DateTime
+        The datetime value to convert. Defaults to the current date and time if not specified.
+    .OUTPUTS
+        String
+        Returns a version string in the format yyyy.MMdd.HHmm (e.g., "2025.1108.1330")
     .EXAMPLE
-        PS C:\> Get-WEMExternalServiceSetting
+        PS C:\> Get-DateTimeVersionString -DateTime "2025-11-08 13:16"
+        2025.1108.1330
 
-        Returns an object containing the external service settings.
+        Rounds 13:16 up to 13:30.
+    .EXAMPLE
+        PS C:\> Get-DateTimeVersionString -DateTime "2025-11-08 23:46"
+        2025.1109.0000
+
+        Rounds 23:46 to 00:00 of the next day (November 9th).
+    .EXAMPLE
+        PS C:\> Get-DateTimeVersionString
+        2025.1109.1545
+
+        Uses the current date and time (example output).
     .NOTES
-        Version:        1.0
+        Version:        1.1
         Author:         John Billekens Consultancy
-        Co-Author:      Gemini
-        Creation Date:  2025-08-08
+        Co-Author:      Claude
+        Creation Date:  2025-11-06
     #>
     [CmdletBinding()]
-    [OutputType([PSCustomObject])]
-    param()
-
-    try {
-        # Get connection details. Throws an error if not connected.
-        $Connection = Get-WemApiConnection
-
-        # The UriPath is the same for both Cloud and On-Premises.
-        $UriPath = "services/wem/externalServiceSettings"
-
-        $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "GET" -Connection $Connection
-
-        # This API call returns the settings object directly.
-        Write-Output ($Result | Expand-WEMResult)
-    } catch {
-        Write-Error "Failed to retrieve WEM External Service Settings: $($_.Exception.Message)"
-        return $null
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $false)]
+        [datetime]$DateTime = [DateTime]::Now
+    )
+    $Hour = [Int]$DateTime.ToString("HH")
+    if ($DateTime.Minute -eq 0) {
+        $Minutes = 0
+    } elseif ($DateTime.Minute -gt 0 -and $DateTime.Minute -le 15) {
+        $Minutes = 15
+    } elseif ($DateTime.Minute -le 30) {
+        $Minutes = 30
+    } elseif ($DateTime.Minute -le 45) {
+        $Minutes = 45
+    } else {
+        $Minutes = 0
+        if ($Hour -lt 23) {
+            $Hour++
+        } else {
+            $DateTime = $DateTime.AddHours(1)
+            $Hour = 0
+        }
     }
+    return '{0}{1:d2}{2:d2}' -f $DateTime.ToString("yyyy.Mdd."), $Hour, $Minutes
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCB0PpyQTnopVNAJ
-# PEOSD+7UmVQcMZiOEaTQbjMQwhfawKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCD8R40dETvrjlnY
+# /QSeFdADDwsNpRMRywfcjrGXHo5m/aCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -217,31 +240,31 @@ function Get-WEMExternalServiceSetting {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCB/4wUBJ9yAP5WfgdB96BSV9BSN3w6aZugOtxbONjyK
-# /DANBgkqhkiG9w0BAQEFAASCAYB/nRF7GmmrQ8o4MQE7z1NE91xua0CUvc/xxGs9
-# BQy1L3jZ4KD0L0Lt8A8254kmbd8BuE2HcnGJLjSumP2S/xLaYVG45BpHlWrPzVsQ
-# oFFRKeLwhu8PdI+pVgweXnj63Xxh/qa1DrYmAuma49VfHUbjxDxK8FS126CKfQKw
-# 6wy86W+jCoTW2OKsNchw5kGOkrFX1tdv1dMYTodWDrp8FbtPM0rDFJQUp0Xe1RSK
-# QTCmjYDr4f72ibbQQjjQqP2qwDiA713IzNmy+6wfS1TiXYMjcFSp7kCrVY/ESbeU
-# qSxJ20RlJojhoE/KWBWdMZcHKF0S/pMV72Tj75DiG5vLysLNdeDBibd7pCF5d2yV
-# U39Psu9PNwQWhheR7yGnkY5rGeZ36CZXL6li8/EojI9G2X2x7EuELi2LiQPei+1v
-# 6i4/kdqysNaNhk4hvdQQY7O39oKUu1XKZKQ/WHw4V+RzMDtDlsixGg2J66mCRGUh
-# KLXsIKlUvnSiW1kh5mVGdSLziZWhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDlUYF+9zCpiDeLY7iF8iSO6OwNN78ru8gXulbjBJ/a
+# 1jANBgkqhkiG9w0BAQEFAASCAYC+aCQm2AZCTXx5r5A7nGn5MKuCq7V0VKtenp0F
+# 8hTLbrVyT53sLZy5rd0sNsQMtFlhavXcmpFdYF0p9bd6FE3WRfE5bGfQSdbWvB3G
+# bss5vFsAO8FTZRtrqHgrC2VfCV3hyX3hHS1aj7/Bkh9/Ktv9sGpn6sXIJ9rppgKU
+# u/FVpS7atft9hk2VfCYMQln0sd1iyZoILlfBhZjh/HMut5T5ylmki0Th+dehKrnQ
+# 4KiKQHA766hIXxYEL6wP95H1NwW59aluahGOO9YUT9yjqm3LleF2vOoN2RBS2Nik
+# gL73gYxJHYQlZUx5TnpEFHa4Exw7gBVXYjunMFljpmehCxxk1Bb2Y7Z3Z4d3veFZ
+# NeeDJhze7r3OBN9HdJcBWxrQOiNAVT4zRwmR7E8YMLsR3SxiFgQfxyCXI2WgszdM
+# ciqmIsZqJtrctEaCJ1+6+wn45oljxFZfeQU0WO37CbCPdk9UJ5DgMjX2lDHZE72v
+# e6rk/ISZ46rEBB/yD59rMaIhVQOhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU3MzFaMD8GCSqGSIb3
-# DQEJBDEyBDCE48VtHnq1w7JBFRaAvWbC+QyyRMMLXBM8COonZVXflbok69ZoyZeC
-# y/pFZkRrV8UwDQYJKoZIhvcNAQEBBQAEggIApdPDqedM3mbwUKgAChMWV30PfM9i
-# +eb/yEqE6m+EKK4zxhdLcN/mvjLwX3MTB4UDMN5H3ekPDWBmeNpTic3V7MlOzuOO
-# 5KJVYsTkoRJ2F6lNeq03O7O9TAlxNoc+dUd2y5UVXpuZ4ZGDM4yPOFuerKZrxVhW
-# 1wA35iE7MMTHyWt97QZlEV6EYqVp2f2DcoO920m4Yn7Ra2wBDs1cElTQsKEpgCvo
-# L8GURpXbOzNJ8RtMSQVJQz9AFzu+kluGh3Fe8xMrbWu8JBx8TvZM6GC1VkcsaEnL
-# jYXo/n8VC2Va5O8/xGH5u6tqIwGd880YqoYnCLEY9qoe7+hdqZTqZEPOCn3tlxea
-# LkgjYlCE3RfewTZLNBDCyGl2IGaN212Q+nhrP72Cx7L23s/ZOL06fuAsn7Ek/h80
-# oDhLZRbJc2O2S3S7MlaFf0NqdlF9xse8/mCbMcT+auFt4FC/NZuyz8jBJ0R2i/nc
-# pvuYiAexO5Whv2FlmNAvJZVA8wCCp/4JyezSSsYsLnCAyXTe7llZo3Jw97EqNLwM
-# o8xlKBribHkd51Z57S1KEQMduOu7OsuTJUCOAeLWTXSWrAqxtmTlrelM+hIZNFpy
-# c7EkLUje8PEH7ViAnUqffG06lQGVGSA58BJ2TdLyUOW5XfI6JIuQ+dIIJnba/5R2
-# qOa9rh/X4ZtUKnc=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU2MTBaMD8GCSqGSIb3
+# DQEJBDEyBDA5ohK/bgzsiNWTXFB9VXQuayQZmo9d+gbVB0xJ9t8SdLtXm2zzJiBR
+# qrjYQ31H/XwwDQYJKoZIhvcNAQEBBQAEggIAsDXv4PovqjM5LO2nkL3d3dQxDACZ
+# wv5fL/88uCT+Xu5Gv3fevCaKTv3hVrgK8h2D8wDmbswCZIOMeNw3VxSJVsZydFp4
+# 2T4MTbY8ONL6bWka7nYs2kZdUQ1+Pbgy3U2yOTNXQDAYyQXNu0bM2GWJet19RmS4
+# QTX8fcv6baDv8B0W1xuYvsxO088csRFm7cMM5tqndnfTRYfx5BGABc7qQ0lxM04s
+# reEDWFd/L17yW30C89Y6S+1TZ1Xc4tAum4hkZdNdS6pkXwz7w36p7DXOTP6ejMoH
+# LTMwwM1S0+EsC6P4s0enhyKp21sgONzIKtohyw8+zA1SZN61NlUO/JfSAUxmHDl8
+# Uh9Atw+AFFDsy9LoEsbQSN/ptIJji58r5qRW9Q5B1unvvVcZWvsC5uNRZP1ekw2X
+# f2La/Ku6l/7se5TjyaqSj9c/nWzPsx5L+J0IrCt/Ztqe705yvTdR2nJcOgAmXnVp
+# JcLrRZiLxO1IypodldcJ3Xxk7eqO9JAxr4MagJwkBrfA+vmz3M+yFPR7lOM9F3G+
+# 4H71ukyQ9uNgnMMzqXkJKI6bnISjvYlFfsHcRYaln6NdhJydbDGcFVqAjuDUL2NV
+# sc5xD13YqjJDviXcob2EVH4fkUeJwQ5l8pP0U+VxOAG29kbGbMmTITjmRSGJdfdP
+# Sl9pORrFxoev8CA=
 # SIG # End signature block
