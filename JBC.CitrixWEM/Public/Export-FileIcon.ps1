@@ -26,15 +26,26 @@ function Export-FileIcon {
 
     .PARAMETER AsPNG
         Switch parameter. When specified, the icon is exported as a PNG file instead of ICO format.
-        PNG export will use the highest quality variant available at the specified size.
+        PNG export will use the highest quality variant available at the specified size with proper
+        transparency preservation.
+
+    .PARAMETER AsIco
+        Switch parameter. When specified, the icon is explicitly exported as an ICO file.
+        This ensures the output is in ICO format with the specified size variant.
 
     .PARAMETER AsBase64
         Switch parameter. When specified, the function returns a Base64-encoded string of the icon
-        data instead of saving it to a file. The encoding includes all icon variants if ICO format
-        is used, or a single PNG image if -AsPNG is specified.
+        data instead of saving it to a file. The encoding includes the icon data in the format
+        specified by -AsPNG or -AsIco parameters.
 
     .PARAMETER Size
-        The desired width and height for the icon in pixels. Valid range is 16-256 pixels. The default is 32.
+        The desired width and height for the icon in pixels. Valid range is 16-256 pixels.
+
+        If not specified when processing ICO files, the actual icon size from the file is automatically detected
+        and used, preserving the original dimensions.
+
+        If not specified when processing EXE/DLL files, defaults to 32x32.
+
         For ICO format, extracts the closest matching size from available variants. If the exact size is not
         available, selects the closest larger size and resizes it.
         For PNG format, always creates a PNG at exactly the specified size.
@@ -54,8 +65,26 @@ function Export-FileIcon {
     .EXAMPLE
         PS C:\> Export-FileIcon -FilePath "C:\Windows\System32\shell32.dll" -Index 3 -AsPNG -OutputPath "C:\temp\folder.png" -Size 128
 
-        Extracts the 4th icon (index 3) from shell32.dll, converts to PNG at 128x128.
+        Extracts the 4th icon (index 3) from shell32.dll, converts to high-quality PNG at 128x128 with transparency.
         Output: C:\temp\folder.png (~11 KB)
+
+    .EXAMPLE
+        PS C:\> Export-FileIcon -FilePath "C:\temp\myicon.ico" -AsPNG -OutputPath "C:\temp\myicon.png"
+
+        Converts an existing ICO file to PNG, automatically detecting and preserving the original icon size.
+        For example, if myicon.ico is 256x256, the output PNG will be 256x256 with transparency.
+
+    .EXAMPLE
+        PS C:\> Export-FileIcon -FilePath "C:\temp\myicon.ico" -AsPNG -Size 32 -OutputPath "C:\temp\myicon_32.png"
+
+        Converts an existing ICO file to a 32x32 PNG with high quality and transparency preservation.
+        The icon will be resized if the requested size is not available in the source ICO file.
+
+    .EXAMPLE
+        PS C:\> Export-FileIcon -FilePath "C:\temp\largeicon.ico" -AsIco -Size 64 -OutputPath "C:\temp\icon_64.ico"
+
+        Resizes an existing ICO file from 256x256 to 64x64 with high quality rendering.
+        Useful for creating smaller variants from large source icons.
 
     .EXAMPLE
         PS C:\> $base64Icon = Export-FileIcon -FilePath "C:\Program Files\MyApp\app.exe" -Size 32 -AsBase64
@@ -66,22 +95,23 @@ function Export-FileIcon {
     .EXAMPLE
         PS C:\> $base64Png = Export-FileIcon -FilePath "C:\Windows\explorer.exe" -AsPNG -AsBase64 -Size 256
 
-        Extracts the icon, converts to 256x256 PNG and returns as Base64 string.
+        Extracts the icon, converts to 256x256 PNG with high quality and transparency, returns as Base64 string.
+
+    .EXAMPLE
+        PS C:\> $base64Ico = Export-FileIcon -FilePath "C:\Windows\System32\imageres.dll" -Index 5 -AsIco -AsBase64 -Size 48
+
+        Extracts icon at index 5, creates a high-quality 48x48 ICO file and returns as Base64 string.
 
     .NOTES
         Function  : Export-FileIcon
         Author    : John Billekens
         Co-Author : Claude (Anthropic)
         Copyright : Copyright (c) John Billekens Consultancy
-        Version   : 3.0
+        Version   : 4.0
 
         This function uses Windows API calls and requires Windows PowerShell 5.1 or PowerShell 7+
         running on Windows. It does not require any external tools.
 
-        The function preserves all icon variants (different sizes and color depths) when exporting
-        to ICO format, ensuring maximum quality and compatibility across different display contexts.
-
-        This version integrates with Get-IconInfo to properly handle both integer and string resource names.
     #>
     [CmdletBinding(DefaultParameterSetName = 'ToFile')]
     param(
@@ -114,6 +144,9 @@ function Export-FileIcon {
         [Parameter()]
         [switch]$AsPNG,
 
+        [Parameter()]
+        [switch]$AsIco,
+
         [Parameter(ParameterSetName = 'ToBase64')]
         [switch]$AsBase64,
 
@@ -135,40 +168,77 @@ function Export-FileIcon {
             if ($resolvedPath -like "*.ico") {
                 Write-Verbose "Input file is already an icon file"
 
+                # Determine the size to use
+                # If user didn't explicitly specify a size, use the actual icon size
+                $sourceSize = Get-IconActualSize -FilePath $resolvedPath
+                $targetSize = $Size
+                if ($AsPNG.IsPresent -and $PSBoundParameters.ContainsKey('Size') -eq $false) {
+                    # User didn't specify size - use actual icon size
+                    $targetSize = $sourceSize
+                    Write-Verbose "Detected actual icon size: ${targetSize}x${targetSize}"
+                    Write-Verbose "Size not specified, using actual icon size: ${targetSize}x${targetSize}"
+                } else {
+                    Write-Verbose "Using user-specified size: ${targetSize}x${targetSize}"
+                }
+
+                # Load the icon at the target size (this will select the closest available size from the ICO file)
+                $icon = New-Object System.Drawing.Icon($resolvedPath, $targetSize, $targetSize)
+                Write-Verbose "Loaded icon at size ${targetSize}x${targetSize}"
+
                 if ($AsPNG) {
-                    Write-Verbose "Converting ICO to PNG at size ${Size}x${Size}"
-                    $icon = New-Object System.Drawing.Icon($resolvedPath, $Size, $Size)
-                    $bitmap = $icon.ToBitmap()
+                    Write-Verbose "Converting ICO to PNG at size ${targetSize}x${targetSize} with high quality"
 
                     if ($AsBase64) {
-                        $memoryStream = New-Object System.IO.MemoryStream
-                        $bitmap.Save($memoryStream, [System.Drawing.Imaging.ImageFormat]::Png)
-                        $base64String = [Convert]::ToBase64String($memoryStream.ToArray())
-                        $memoryStream.Dispose()
-                        $bitmap.Dispose()
+                        $base64String = ConvertTo-PngFormat -Icon $icon -Size $targetSize -AsBase64
                         $icon.Dispose()
                         return $base64String
                     } else {
                         if (-not $OutputPath) {
                             $OutputPath = [System.IO.Path]::ChangeExtension($resolvedPath, ".png")
                         }
-                        $bitmap.Save($OutputPath, [System.Drawing.Imaging.ImageFormat]::Png)
-                        $bitmap.Dispose()
+                        $pngBytes = ConvertTo-PngFormat -Icon $icon -Size $targetSize
+                        [System.IO.File]::WriteAllBytes($OutputPath, $pngBytes)
                         $icon.Dispose()
-                        Write-Verbose "Icon saved to: $OutputPath"
+                        Write-Verbose "High-quality PNG saved to: $OutputPath"
+                        return $OutputPath
+                    }
+                } elseif ($AsIco) {
+                    Write-Verbose "Converting to ICO format at size ${targetSize}x${targetSize}"
+
+                    if ($AsBase64) {
+                        $base64String = ConvertTo-IconFormat -Icon $icon -Size $targetSize -AsBase64
+                        $icon.Dispose()
+                        return $base64String
+                    } else {
+                        if (-not $OutputPath) {
+                            $fileName = [System.IO.Path]::GetFileName($resolvedPath)
+                            $baseName = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
+                            $OutputPath = Join-Path ([System.IO.Path]::GetDirectoryName($resolvedPath)) "${baseName}_${targetSize}.ico"
+                        }
+                        $icoBytes = ConvertTo-IconFormat -Icon $icon -Size $targetSize
+                        [System.IO.File]::WriteAllBytes($OutputPath, $icoBytes)
+                        $icon.Dispose()
+                        Write-Verbose "ICO file saved to: $OutputPath"
                         return $OutputPath
                     }
                 } else {
+                    # Default behavior: convert to ICO format at the specified/detected size
+
                     if ($AsBase64) {
-                        $fileBytes = [System.IO.File]::ReadAllBytes($resolvedPath)
-                        return [Convert]::ToBase64String($fileBytes)
+                        Write-Verbose "Converting ICO to ICO format at size ${targetSize}x${targetSize} with high quality"
+                        $base64String = ConvertTo-IconFormat -Icon $icon -Size $targetSize -AsBase64
+                        $icon.Dispose()
+                        return $base64String
                     } else {
                         if (-not $OutputPath) {
-                            $OutputPath = $resolvedPath
-                        } elseif ($OutputPath -ne $resolvedPath) {
-                            Copy-Item -Path $resolvedPath -Destination $OutputPath -Force
+                            $fileName = [System.IO.Path]::GetFileName($resolvedPath)
+                            $baseName = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
+                            $OutputPath = Join-Path ([System.IO.Path]::GetDirectoryName($resolvedPath)) "${baseName}_${targetSize}.ico"
                         }
-                        Write-Verbose "Icon file: $OutputPath"
+                        $icoBytes = ConvertTo-IconFormat -Icon $icon -Size $targetSize
+                        [System.IO.File]::WriteAllBytes($OutputPath, $icoBytes)
+                        $icon.Dispose()
+                        Write-Verbose "ICO file saved to: $OutputPath"
                         return $OutputPath
                     }
                 }
@@ -182,7 +252,7 @@ function Export-FileIcon {
             if (-not $AsBase64) {
                 $fileName = [System.IO.Path]::GetFileName($resolvedPath)
                 $baseName = $fileName.Replace('.', '_')  # Replace dots with underscores
-                $extension = if ($AsPNG) { "png" } else { "ico" }
+                $extension = if ($AsPNG) { "png" } elseif ($AsIco) { "ico" } else { "ico" }
                 $generatedFileName = "${baseName}_${Index}_${Size}.${extension}"
 
                 if (-not $OutputPath) {
@@ -212,37 +282,41 @@ function Export-FileIcon {
                 $memStream = New-Object System.IO.MemoryStream($iconBytes, 0, $iconBytes.Length)
                 $icon = New-Object System.Drawing.Icon($memStream, $Size, $Size)
 
-                # Create high-quality bitmap
-                $bitmap = New-Object System.Drawing.Bitmap($Size, $Size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-                $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-                $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-                $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-                $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-                $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
-                $graphics.Clear([System.Drawing.Color]::Transparent)
-                $graphics.DrawIcon($icon, 0, 0)
-
                 if ($AsBase64) {
-                    $outputStream = New-Object System.IO.MemoryStream
-                    $bitmap.Save($outputStream, [System.Drawing.Imaging.ImageFormat]::Png)
-                    $base64String = [Convert]::ToBase64String($outputStream.ToArray())
-                    $outputStream.Dispose()
-                    $graphics.Dispose()
-                    $bitmap.Dispose()
+                    $base64String = ConvertTo-PngFormat -Icon $icon -Size $Size -AsBase64
                     $icon.Dispose()
                     $memStream.Dispose()
                     return $base64String
                 } else {
-                    $bitmap.Save($OutputPath, [System.Drawing.Imaging.ImageFormat]::Png)
-                    $graphics.Dispose()
-                    $bitmap.Dispose()
+                    $pngBytes = ConvertTo-PngFormat -Icon $icon -Size $Size
+                    [System.IO.File]::WriteAllBytes($OutputPath, $pngBytes)
                     $icon.Dispose()
                     $memStream.Dispose()
                     Write-Verbose "High-quality PNG saved to: $OutputPath"
                     return $OutputPath
                 }
+            } elseif ($AsIco) {
+                Write-Verbose "Converting to ICO format at size ${Size}x${Size}"
+
+                # Load icon from bytes and create high-quality ICO
+                $memStream = New-Object System.IO.MemoryStream($iconBytes, 0, $iconBytes.Length)
+                $icon = New-Object System.Drawing.Icon($memStream, $Size, $Size)
+
+                if ($AsBase64) {
+                    $base64String = ConvertTo-IconFormat -Icon $icon -Size $Size -AsBase64
+                    $icon.Dispose()
+                    $memStream.Dispose()
+                    return $base64String
+                } else {
+                    $icoBytes = ConvertTo-IconFormat -Icon $icon -Size $Size
+                    [System.IO.File]::WriteAllBytes($OutputPath, $icoBytes)
+                    $icon.Dispose()
+                    $memStream.Dispose()
+                    Write-Verbose "High-quality ICO saved to: $OutputPath"
+                    return $OutputPath
+                }
             } else {
-                # Return ICO format (single size)
+                # Return ICO format (single size) - default behavior
                 Write-Verbose "Returning ICO format with single size variant ($($iconBytes.Length) bytes)"
 
                 if ($AsBase64) {
@@ -265,8 +339,8 @@ function Export-FileIcon {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCn2WLEMDHn8Mgu
-# C6SeOZl0a2xntq2iVr3nOozAPAgX96CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCsPnpJpIeNZL3v
+# lbYLRWtpkBkZ0MiscKmrNoAL3JGi9qCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -442,31 +516,31 @@ function Export-FileIcon {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCB8VcRjZINxbY5kQknKaQF0ik04sgI/LYEZuuMEB6Mx
-# TDANBgkqhkiG9w0BAQEFAASCAYBbjeQz5beuqfBbmfFvv+tWf9EbCdfNPKD9S8uS
-# pszD/Pi5tvOoG35y/nkrU1UIlhjn0p1NzJzS0bW7gfoOxq//LtqOdsbrVsWEFbEs
-# njU0vUc1uoPwRqddbHX5WxCBZS2pTy/VdtYlOMfhFFn+vvErLjZpaITnX2uqXLYu
-# UwsTFI/d+3qOuskrTa+DcYYtdZa8HRXakQ0Qr+SAxtBEy319TzM3B6bcuEPpoxlb
-# eZwLg4o/p8sVvmFKVVPO2V8G+26VNlZa1bdMKsMNmryGs3siZ0d9q8cuyyQRoIfL
-# XX4BKisB619gDaU8SGYcg8sQQFR3TSo80to5lCxXX7z6Y2o/pvHKQ10GRv4jiS5A
-# vVcziVYkbQezPi2N8/9yVCJ2R5A3htm3F+Adyg3lLUS0kDbWOgrbWadeb6wGcUbD
-# Mo6aGD8psLL0o4kjTTKo6wpjNaNjcQm53kl1ZnxRf21pTzN04CZtfCNSXEiX2t0J
-# 1pufC3/dYrEfHeI7XtkcOOy7r72hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBjzTjJpaow4aVt3kEH2jyiLXyFUH7si2kdG5B78vaf
+# KzANBgkqhkiG9w0BAQEFAASCAYCrqcYA9m3EoGuK+vanB1S8TG/RKhMSqqJNvZiw
+# Qsd3EioFgqr8yliB+lIafEqjrHiW5uiAMohSxZVUD0fjfEz9OcOf88Ro8C2o2VtO
+# RHFuf80OJ/Dnsa/8VuGhBaapmtWb9suSs80fArER5QL2ISeaIdu2YajTJQ0uNqEn
+# joXSwIOudRBp5PoPdsYgETiH7yQZD5HpyrQ76ZPcZCsZcg72xj2IaCmp9slJ1POm
+# tXz43rUs8p94e+hTbpduQK8oiy4osmu1Fhz/8a3M2GKBagKPznG++gnjjdP3oBUt
+# hNJKh1Ppxk8RNzBmLc2+N2B102yf1lO3Lc9bh+RumQ0wXAFxdQht9YPXRn+g0mX0
+# w7wtH1lwcBOHCdoe8q6N6yduZb52cnWITSN8Yff+s0NCm59blneZwd/UDPEKjhO1
+# ZPO4oetqXXdIRMbNGriJdnmgTmMs+EkyiUfL9uVu3sqwGELEMs9bKWZwFVnSlkhm
+# TuO7sWpcbkgxr1pKUuvrhu9jt42hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU2MzFaMD8GCSqGSIb3
-# DQEJBDEyBDCwcgnzBeokMbY8OvSmtUtls6H7gE8P6qUVQNGa02APAGOP+ptBKlYN
-# 71mHbQRa4ecwDQYJKoZIhvcNAQEBBQAEggIApJdMzP5guP5sVsdF9MGyTuP4NH8P
-# 9HQ1XKxXxL26oR8hi+vpCEIR7O2/R4CsOyFS/IdLO2ih17WKBC09O/14GvpFXt8q
-# nfgoq3h/whwYYp/B031gxLSNPPmR+wov/jzoeJnAWSzs8/ccQIzVCbb94tDPNpE/
-# 7BTLqP9L2sMXgBffzUSiXFPDm8aDpNT9haGrMnhxnHfuPdcqg9R2gGkd6hN46TIs
-# cnNxzMN1PLy368aexSfT3eOHldRRERztVZWpf/XIV3lfewcnbSKyowg05nKbdGpp
-# x9q+TFnMsRCEzA98bExtvQ+ew+7mZPkd+o4SzLom8oxLjvKeKJRFZ7zSDYS1S+ss
-# kZYv7E7J3YTYgpshdC0uoOwtlOD1Dhk8rcxagmPY3rk+nR3nwEqydWEqh8oWt1pB
-# pPxTFalq1OrlKZbBsSwmsC8qRppHtQK10wbUHI3r1g7X9u9KCm1YuK5Wms0KXlNv
-# mliJd73yPBX7OI5gPw2DOgd75KLCvWcRUJQWBRLtYx/TCO3cGl/Ws9KFhNPPdvEj
-# 6hGanQFCjLxqJpXXi15YmN4Ue9VjUfpYQqcBm9h1iQZHJSjZfaQdQbzB5W/W5Ymy
-# OuW7jhgvrrS2M4NWCHeeXCaTQup9pjGuwlagB4iHqjj/i6bLq5HBzO8DeLoV9Yy8
-# 87Qv9TI9w7KUCiU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTExNDIzNTNaMD8GCSqGSIb3
+# DQEJBDEyBDA5x82tNHsMxsya8ohHHSnSV3aPZdHJ4o4JmYRmnJ3BfFxZWIMNO4z7
+# phKkP+K4LVcwDQYJKoZIhvcNAQEBBQAEggIATei2G6bQnTUTEDnt2mwwuCICPHos
+# 2AAndP3nwynpSTcGIEGv2VZLLYnyDosnF/mPex4M2jXE5BkqEv05AveqOypDC/cg
+# tCJjXUqJVtCtQVyStUjFr10kCk1FSC3xrxv8miYz38n6opNGMhgJ+X+DPGmgUv9z
+# U8k2y6B8Z3J5PSSvuWa7FACAk1Vfb7TXU9Lq+//wj3z/7HTjgA8rdwloIQRT4OPk
+# OEn7GzUBkv49SyaBUJW+sdFxw1WLm3x5etn6BkgyTpor2LRlSSIIYG2B7avn23zD
+# OrVsun7LIf68rRyFkCRuHdWIq0WhRBZ0QCa0Bof5EEmAX8IPEc0qnTb1tTimwoFL
+# p86HZZPJmWQqdjmcS7xUhzhDeXDfQ1CzAh4gFzr9EiXs9K3RMr919KET2BnvbNSg
+# vAzxSZtsgUBPo8RymlfGlDMS0798EaOAsql62EfLXIeUKMn3S0HTvorURlkLSbjq
+# bmIiaC7/X0nCStkQpq88n6o5aFoVEvEylZrH+3pX5jgd5Lu9dKqyPp3SglubXj5e
+# x2SxTQdXMYtuhTDP5iVCpSgGTQBOpNlzZ6aVXO76MDXJPseqoGCx5kT72CMt/Fal
+# gPzrzuoN5TbNny+FYzj1YCHQxzJ+nIeS2yOa9CZrLf/IET/y2/PWpEnNEwvQcaSQ
+# Na+Y1PPUArbFLF0=
 # SIG # End signature block
