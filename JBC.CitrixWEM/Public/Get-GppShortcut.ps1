@@ -103,6 +103,9 @@ function Get-GppShortcut {
         $IconStreamDefault = "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"
 
         $ResultOutput = @()
+        if ($GpoName -isnot [array] -and ($GpoName | Measure).Count -eq 1) {
+            $GpoName = @($GpoName)
+        }
     }
 
     process {
@@ -129,6 +132,8 @@ function Get-GppShortcut {
                         $IsQuickLaunch = $false
                         $IsStartMenu = $false
                         $CreateShortcut = $true
+                        $IconPath = "$($Shortcut.properties.IconPath)"
+                        $IconIndex = $null
 
                         Write-Progress -Activity "Processing Shortcuts" -Status "Processing shortcut $($AppCounter + 1) of $($ShortcutNodes.Count) in GPO '$Name'" -CurrentOperation "Shortcut: $($Shortcut.name)" -PercentComplete ((($AppCounter + 1) / $ShortcutNodes.Count) * 100) -Id 1 -ParentId 0
                         Write-Verbose "Processing shortcut: '$($Shortcut.name)'"
@@ -235,7 +240,7 @@ function Get-GppShortcut {
                         try {
                             try {
                                 if ($Shortcut.properties.IconPath -like "%*%*") {
-                                    $IconPath = Convert-BatchVarToPowerShell -Path $Shortcut.properties.IconPath -Resolve -ErrorAction Stop
+                                    $IconPath = Convert-BatchVarToPowerShell -Path $IconPath -Resolve -ErrorAction Stop
                                 }
                             } catch {
                                 $IconPath = $Shortcut.properties.IconPath
@@ -261,16 +266,16 @@ function Get-GppShortcut {
                                 try {
                                     $IconStream = Export-FileIcon -FilePath $IconPath -Index $IconIndex -Size 32 -AsBase64 -ErrorAction Stop
                                 } catch {
-                                    Write-Warning "Shortcut: `"$($Shortcut.name)`", Failed to export icon from path:`r`n         '$IconPath'`r`n         With index: $IconIndex.`r`n         Error: $($_.Exception.Message)`r`n         Using default icon stream."
+                                    Write-Warning "Shortcut: `"$($Shortcut.name)`", Failed to export icon`r`n         Path : '$IconPath'`r`n         Index: $IconIndex.`r`n         Error: $($_.Exception.Message)"
                                     $IconStream = "$IconStreamDefault"
                                 }
                             } else {
                                 if ($IconPath) {
-                                    Write-Warning "Shortcut: `"$($Shortcut.name)`", Icon path does not exists:`r`n         '$IconPath'"
+                                    Write-Warning "Shortcut: `"$($Shortcut.name)`", Icon path does not exists`r`n         Path : '$IconPath'"
                                 }
                             }
                         } catch {
-                            Write-Warning "Shortcut: `"$($Shortcut.name)`", Failed to retrieve icon from path:`r`n         '$IconPath'`r`n         With index: $IconIndex.`r`n         Error: $($_.Exception.Message)"
+                            Write-Warning "Shortcut: `"$($Shortcut.name)`", Failed to retrieve icon`r`n         Path : '$IconPath'`r`n         Index: $IconIndex.`r`n         Error: $($_.Exception.Message)"
                         }
                         if ([String]::IsNullOrEmpty($IconStream)) {
                             $IconPath = "$IconStreamDefault"
@@ -284,24 +289,24 @@ function Get-GppShortcut {
                             $workingDir = Split-Path -Path $CommandLine -Parent
                         }
                         $Output = [PSCustomObject]@{
-                            GpoName              = $Name
-                            Action               = $Action
-                            Name                 = $Shortcut.name
-                            TargetType           = $Shortcut.Properties.targetType
-                            TargetPath           = $Shortcut.Properties.targetPath
-                            Comment              = $Shortcut.Properties.comment
-                            IconIndex            = $IconIndex
-                            IconPath             = $IconPath
-                            ShortcutKey          = $Shortcut.properties.shortcutKey
-                            Status               = $Shortcut.status
-                            CommandLine          = $CommandLine
-                            ShortcutPath         = $Shortcut.Properties.shortcutPath
-                            StartIn              = $Shortcut.Properties.startIn
-                            WindowStyle          = $WindowStyle
-                            Arguments            = $Shortcut.Properties.arguments
+                            GpoName              = "$Name"
+                            Action               = "$Action"
+                            Name                 = "$($Shortcut.name)"
+                            TargetType           = "$($Shortcut.Properties.targetType)"
+                            TargetPath           = "$($Shortcut.Properties.targetPath)"
+                            Comment              = "$($Shortcut.Properties.comment)"
+                            IconIndex            = "$IconIndex"
+                            IconPath             = "$IconPath"
+                            ShortcutKey          = "$($Shortcut.properties.shortcutKey)"
+                            Status               = "$($Shortcut.status)"
+                            CommandLine          = "$CommandLine"
+                            ShortcutPath         = "$($Shortcut.Properties.shortcutPath)"
+                            StartIn              = "$($Shortcut.Properties.startIn)"
+                            WindowStyle          = "$WindowStyle"
+                            Arguments            = "$($Shortcut.Properties.arguments)"
                             WEMAssignments       = @($TargetedGroup)
                             Enabled              = $Enabled
-                            State                = $State
+                            State                = "$State"
                             CreateShortcut       = $CreateShortcut
                             WEMAssignmentParams  = [PSCustomObject]@{
                                 isAutoStart   = $IsAutoStart
@@ -390,8 +395,8 @@ function Get-GppShortcut {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDNWRdHuLADKTjS
-# 8mOllmDDbXE0r/tXW0OojaP43O5shqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBafsQ4YL0XsqIL
+# 6kzR5lrqPn14p0mfQxbp9KbCS8iNrqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -567,31 +572,31 @@ function Get-GppShortcut {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCA3tDkext2AM4CV8Qgs7lK6tBCNdeDkicsT5mUQFPRx
-# fDANBgkqhkiG9w0BAQEFAASCAYA7wvOJoogib03v1T//VYnBSB8dpWK+QN+z2hx7
-# mQPp3rEZmIQd0e1e7zjjLerkOLhqxEGF72jesDgCKqwoc/eS5e0cssXkNcnjMVIb
-# 6P6xIer1Ap6fP+qhgrHEaJdSsyCl8cw8lDT9EQxer6urtDu/1qi6IqLO8qkL8wj/
-# ge7FpTZn6//Fes6bPJo99PfSF+I/El9mVI991MNM3IXQlTpozpwodfvAzOYgITGv
-# 2kZWjjIywevSUVYnnJ3d/RjUojvIlUJxsSEba1LadS2uiZNEtCaKgthH1o+UxO/t
-# w1SZYVt1uPHHWj8UwyjRaoh/TRPgBye+X013CmtWsNsKnk7r3D6tESmgoA0OFaF/
-# UszjygisAkvsD4Q/fLSFdp/OAh7LszlXbjLa3WRVQQ0nYRyp60P3qbNsAnYKUV9Q
-# Z/4v0RLR22S/n9/3kG/7P4xteuB23WSPrdfQ6nSp+ARvKiGE76qXJ5mbd1i4kJ5H
-# 9KWVeV1eC7lLCRGiI8XK+k0WsCWhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCA3orji+VeQhtNrE8T9Zb2JoMowhyW6Qgo4ifWm9FEE
+# 9DANBgkqhkiG9w0BAQEFAASCAYBS3Fp7hYeCi1ODqU2L00xDPpMqrfWxoouLXn9t
+# 3CEAn+9hPsrHnL/K6PSF+6gwzFbJMf+PY6835L6ZozyCdSgH1jyZlxhz3usP3Rrx
+# tPsMPBYZSgg5a9iQDFNYmOl6xIWWAai3cqHdyWJmKC6fubITCF/Wjk4aBVGStjFx
+# ZI41ZdpucR2pxz9/HKMTbcyrCMtW9sEfqrGPKKXU/iPK8GumgETa69fxlyNrJr3C
+# 59igusB3sl9+Uhqhl8UFKAOzlLSpgoQQISIYNbJ0ue7OKAPkBRLgmAe7Hdd2tetD
+# hBxoXwX+6FWAcOU99ruy7UAFTk/pGCn8Hq3AF2BL7AvIax23F1BdoBLiv5t6t0Sa
+# RfzyVJ0cQ+9MntOx8zYkjRixn3cVbiJwNo5gv2VzHhmwjyex5aSLZBJDT9Wk0GKM
+# HlJSxBZ0kpjHJr1K/y+diJ+O9JpxlVMzUUKidAit0fVfzxeV6JD0GzYlcQ0SaMC9
+# SYK7/tpyXv7eWog0UbwHifyB76+hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTIxODI4NDdaMD8GCSqGSIb3
-# DQEJBDEyBDD0kt5a3CFRo/yWJCbZ85/SnknTzq0PIV6pXbFIAGkUXnrrG2u4aLXx
-# 6qPfPZr0HrcwDQYJKoZIhvcNAQEBBQAEggIAU0nZQeJHk0XI1+v6i8Sv4810e8W1
-# 3Fk21WaLEpmczjURbInY0Zux6T7BT1PCN3M+JIUhv0HOURR0IIVDEN4JT3KxICMC
-# HkZ7v8de59/fF2FMeayw4nE7fUQAmu7iJDfqf6/fcdw8rGfqmRfbGouzwedYkzuU
-# NgJjGqVSEf8XeNOTRTnyJe9WzCfioXnegeQW9sIjRtvzRZKy1pWIBnv/jU4k1/ee
-# G+yNC6XMQKdHMgR5XYJISKzaxtRYRiknNzTOztDN/Kbj07wjU7rRJfVZtAVuDoYF
-# 5GtcQPl8lah2aB8mSRj/JyaDrVdUWGyjx8aGE4s8s+FAfi9WmMyf0YTFMnTzTkTH
-# IeZuP2DDyBQvv4xVcYm+eVoJejU6EX9qlrFpSnOWv9XPJo69pdyHlUQBCXJSo0Gm
-# f7xyOdfFvCB6cm67Rt5bRBHeRwXrnEuDPB8sdzD1MX8ayUF0rNHpJLul+NYpP7aE
-# 34K/UYb4ZV60TWXDptsJwh2KdNURYlnm5BPOX9h89JfC7KumLOL0+/8ERPLuWF9X
-# SJN1LMj38JmGum+Jq42jeoJKkgVTSYR/FLTmmn/LmtWk8AJVaKxPY4QFbcmZlg+B
-# 4reioMOsHHDXjUR7ujMVSBskd5+gN2sz67nMY1eBfWmNKb4SS9rlPHcnxDOCk8r7
-# OCpBt06pVKq5uKs=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTIyMDQ3MDVaMD8GCSqGSIb3
+# DQEJBDEyBDCgGEGIYT+qW6Tw/ghGPQfvSFVWALVvhHDhWcdWh92Ido/3k/xVjR3d
+# xHmpFro8X/swDQYJKoZIhvcNAQEBBQAEggIAjNfbUbYnhYG/SjPfzzGTY7SQy3Ag
+# RQowNSvcDLldctbd0hOZ1QJ2XJVeDdootyixObGrosGSb/EOer03OYD3G0Iv7vbM
+# I0rFKPZNZEe54jiWFNNLx0wvVMGcNGHlqDfGS1aR0Gcs6S580B53/BAOe4fFn/B1
+# ES1tn79EckMSJ6BqS/iNKK67Due1DmviBO5kcEkCVRCStvS25LOLEbs7i2EJR6ga
+# sVL5itL5Zt8/7lSUPKmiuNd3bkDWBh2CM0OAxw3vTzq89Q34O1NxakC0iTiIRYjT
+# eskoOzYwr+Ic05Tu+86HlVPKNWj+jYGoXlrhFuwWvsj/52zn7Q8BY/g0rJgUN7Y9
+# /fst2+tlFGsf6OH/pfwlqghWKxriiRR5y2+NH1DoDcUAwAgvQN2aTE9UMXJd5Sol
+# 1cOhZuvEodgcioIz2Blx4dGGqqNwQCPASsvYyo3HP2Sb61AHUxGxlNUqyQHKBpRZ
+# Refld3a2CKpNjpzBVCw2AFlqNIBXKkplh5u0+7ejVhTbLhi9Ogi4xK8lbtXuKBWj
+# hUQtdJ23HdUqHj2av1Ud/OslTIbSTB60IHuLCbsCEdiKfZKWzZNuCLb8XBdDJ/MC
+# iJ1k7c818FMRhNSxxL1VRvsmgjAcydh1peVVPm8zgoZf+lG/NnammnecMMmRPARB
+# 4XTkzgqkwOsAVOQ=
 # SIG # End signature block
