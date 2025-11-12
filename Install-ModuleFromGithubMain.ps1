@@ -57,12 +57,17 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
     Write-Host "File saved to $File" -ForegroundColor Green
 
     Write-Host "Expanding $ModuleName.zip to $($InstallPath)" -ForegroundColor Cyan
-    Expand-Archive -Path $File -DestinationPath $InstallPath
+    $TempPath = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), [guid]::NewGuid().ToString())
+    if (Test-Path -Path $TempPath) {
+        Remove-Item -Path $TempPath -Recurse -Force -ErrorAction Continue
+    }
+    New-Item -ItemType Directory -Force -Path $TempPath | Out-Null
+    Expand-Archive -Path $File -DestinationPath $TempPath -Force
 
     #Extract module version from module manifest
-    $ModuleManifest = Get-ChildItem -Path $InstallPath -Filter "$ModuleName*.psd1" -Recurse | Select-Object -First 1
+    $ModuleManifest = Get-ChildItem -Path $TempPath -Filter "$ModuleName*.psd1" -Recurse | Select-Object -First 1
     if ($null -eq $ModuleManifest) {
-        Write-Host "Module manifest not found in $($InstallPath)" -ForegroundColor Red
+        Write-Host "Module manifest not found in $($TempPath)" -ForegroundColor Red
         throw "Module manifest not found"
     } else {
         $ModuleInfo = Import-PowerShellDataFile -Path $ModuleManifest.FullName
@@ -74,9 +79,9 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
         Write-Host "Removing any old copy" -ForegroundColor Cyan
         Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Continue
     }
-    Write-Host "Renaming folder" -ForegroundColor Cyan
-    Copy-Item -Path "$($InstallPath)\$($ModuleName)-$($RemoteBranch)\$($ModuleName)" -Destination $InstallPath -Recurse -Force -ErrorAction Continue
-    Remove-Item -Path "$($InstallPath)\$($ModuleName)-$($RemoteBranch)" -Recurse -Force
+    Write-Host "Moving new module to $InstallPath" -ForegroundColor Cyan
+    Move-Item -Path "$($TempPath)\$($ModuleName)-$($RemoteBranch)\$($ModuleName)" -Destination $InstallPath -Force -ErrorAction Continue
+    Remove-Item -Path "$($TempPath)" -Recurse -Force
     Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
 } else {
     Write-Host "Running locally from $($PSScriptRoot)" -ForegroundColor Cyan
@@ -89,8 +94,8 @@ Write-Host "Module has been installed, to import run `"Import-Module -Name $Modu
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBYFEAvBOF0y25c
-# VvAYfspg55Tf7EGTSVWsMtSrkfbwXaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBazlD2/dHfLfDd
+# pPPNpWZVx8WdNtYu5okJP95L6KBYUKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -266,31 +271,31 @@ Write-Host "Module has been installed, to import run `"Import-Module -Name $Modu
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCAl9IZjKaW2EmZK71igXdvu9sJhtZlZYxxewRaqRb/p
-# hDANBgkqhkiG9w0BAQEFAASCAYANOArU1fq56Ah8prKAQ01IhVIazwo5qUaI8QyD
-# JhqK04oI6YerEFZXD2tzwJ0Eo0nL3xjdVKjgrweNnXBx6uZ926F9g8wmrJRM5Flj
-# M2zqw2IIuCfCziPw/CqXW3RYGkHzFcriCl3g5EHykzGeYx3AZpTzFIhdrorlDQmE
-# T8b5c5uYoh0B8ED+yLTprsUQV8eTwxYE6v0vsfw/pFl9VL58Vxvog/KcFbHELp+A
-# LpA+wZJzzQtOrY8/JzcMB5P0il5+wo6KKD0/tVegf1M4bJx4AeLbg79xCeyR8W3z
-# mSdjscX+Yi2/CKVJY2Z6bSRkrUF9X8R28sf47OdDUbc5ZkE0zxx9XEid6pttvAGe
-# yiIsJXL60J+oeVp9eoDbiNlyXoRAZtRE68HmjO3aeQirLxpxIAsJUfB4HvTEKBJd
-# jHXCpLdzojKQPE90bINcAueFXH7qBL06DoD23wFRvQNXiSj75ejLJW1jKSsbc8xM
-# s9SMruNawx4bCbiRzAIMT+yMEeqhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDGP/GNzDNpUMG5soxlov4rNmK9soP8i1pW0dFPLTt9
+# kjANBgkqhkiG9w0BAQEFAASCAYBvQg07S1M8uVsbu3kBTn9HeZ8m4NGaPRogablW
+# n1eIWMpASBgjADVj/FZJ7H6VRXqmfmURKWa5U+f6B7MgbqBKEnkTrk1CgDXFO0oB
+# 1cXf4vE7M+MpXNt2rCdVWr5lJ3FtpFnm/m8nQ9UF8lWmJ6Tf/wswMjXvv69nsPtv
+# j2DX6Y9te8IGocrGhzGSjp04dymSBfwAza2MQ0FrqgEmasTG/sSBX+SLhpqIhMHv
+# wG6lFhFZfMJex9XbJfPd1ParR0/rbTFAJC0NhTK9D56yI9IZqxq/0bH2tAbqHktw
+# sCGPX8VlG1106Ij3fpdfl0GWpvtWer4LsAPEYJR7kpAJLDbNhbFzhjNf+kjprU3X
+# gcMNkklofojCWFhxhIXOp/1Bpzi2UX0ytdSSdbHPEJx67UukTe4ZDBcr+seT7qQr
+# lkUpIiYpRy0v+ONaZKr8L9Ohv/krKQBvbilbmaXFM7TPBpGDNWMOCDV035pmQGUJ
+# ++f/7CZiKXbQ5Qcw68Jq/KDb0UihggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTExMDAyMzJaMD8GCSqGSIb3
-# DQEJBDEyBDCk3utCqKPvZyLODA0xE4T4HZiIsKQihNz/RiagyVz1ddwJcjGcSS1g
-# NQvc4na4E4kwDQYJKoZIhvcNAQEBBQAEggIAAieRPverrG9e+htFkXlsj0ay5Cbm
-# nAfcQvBxAYZUBGm09QMil2x+MTRJG75aHHQM3HgbonPhePA2h6io7fONXugrtITe
-# DOjMs9gcAxqJw7yQBdFTIJqzUq4SprNoavPS2HZ/5iFOqVF/z0suxons2EAlrL19
-# +OcfctDigafTsNfzt3Eoduq03wxq/Ir4jQmXi3sjU37SSrnxgQpjyPMnnL5FQw4E
-# kg9+CZtgBjLNpRMENmaf0unTWqAAQLPZv+NXhUOWnf6cH50IQrPHz32P85kUZqyL
-# lYNH/OM6VGb5bknGoPSiQ1bOWv6oAAPoLalLsluFr41L+2kB67qfqOLxSqgBWF8o
-# H4/v0z5lfnVFxCKYQNaDXHTwyHja14/Ptf3GNJjzJKpXafZCFy10StT7MnHInwVN
-# C+HRUC1erKF/n5eYZfv7xslJHrnLOBo/ugRKCenmiUY+tJMschd5oxKyTc3gJluV
-# Rq2nbbr796BcOZNPOV17e/gvl9mC0BkwIALPHFeq9Ymm/rMyO0svikZpQcmhwn0+
-# 7raZ/g1C3KzyrKoO/jV4pX15LpsLFlVo1Y/qC3Zzc922qsMbCX9Cndpq2/46ArkN
-# eHXg8HD873P/bfgUedgx6rDeCPgXGidIHdTyVoj1NS3NDb43zaoI+VbgP5AOPvEw
-# 9TDYHR9YR8f/JCg=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTIxODUxMDdaMD8GCSqGSIb3
+# DQEJBDEyBDAWrcFtE1duGr+gRUW5UufJLxDeXkdjbMeNfakhuyrkap/X3fqzObdy
+# U9KfTIo8UN0wDQYJKoZIhvcNAQEBBQAEggIAFY2m5geC7naf9axJlGdJr1vpCbTm
+# LiZeNv2TQRvfELcxYkJK8irYINGa7K2Q1+9f1fLHuKJUTaU6XJw1erxNe/OU8QSn
+# bEvaurM7puoCdD+YRFKXS2A384MdG/7Av1fnAYEATwXtTAzc9U09NMaNMrpcxMXd
+# TLf/T1jLjE6EsrdUi/CQD5I9kNW1jQdeEPYwyRjZzfzuvSXsoH6l3T002aFybMip
+# b/ujPLKRBheodWUO27f4b0W1T6A5JuQBVTvnapaAVU3lwAzS8Ke5zSGCx3KvFEEs
+# dp6GVP04L3b+Sk+d/OewmXfkNtPLhGU3hn4MyZO954UdRyTkzN7jv4RVnLfXxLTF
+# QqwrTf4KRTm0jJhZL5FV0gBIi7ZY53ZI1LIYPjrFTo4USuYcMOGrbj8pVcEQK8P4
+# zH4YDyAzB4UVmGRgQYUK30OqEva7qtfZiEmYGffwdkdwdfKkjR5Fm+gSwDv87eWp
+# XZbEVeHABtv2JK+3bOshk/ae+0Zbff7QCwUsoFVirT/xvKbxQqAQ6C6I123UIpKM
+# 7cegxTTC2fN5j6lh59RBnyD25u17a5rQ2+45/VFoZk+t6fQ+90huFYU97snAuAol
+# 9jJgLYG2qKlud0JnNK4Oz2Is+lg0EqbRq3lswt9Ycex91CyDdZfjn0HwJa2gSRPh
+# 3cuT3+VLJbgXLZg=
 # SIG # End signature block
