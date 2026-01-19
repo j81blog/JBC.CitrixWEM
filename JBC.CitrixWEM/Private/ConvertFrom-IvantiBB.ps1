@@ -1,102 +1,69 @@
-[CmdletBinding()]
-param(
-    [Parameter(Mandatory = $false)]
-    [string]$remoteBranch = 'main',
+<#
+    .SYNOPSIS
+        Converts an Ivanti Building Block XML file by removing webtop elements and returning parsed XML.
+    .DESCRIPTION
+        This function reads an Ivanti Building Block XML file, automatically detects its encoding, removes any <webtop> elements from the content, and returns the cleaned XML as an XmlDocument object. This is useful when processing Ivanti configuration files that may contain webtop sections that need to be excluded from further processing.
+    .PARAMETER XmlFilePath
+        Specifies the full path to the Ivanti Building Block XML file to be converted. The file must exist and be a valid XML file.
+    .EXAMPLE
+        $xml = ConvertFrom-IvantiBB -XmlFilePath "C:\IvantiConfigs\buildingblock.xml"
 
-    [Parameter(Mandatory = $false)]
-    $uri = 'https://github.com/j81blog/JBC.CitrixWEM/archive',
+        Reads the specified Ivanti Building Block XML file, removes webtop elements, and returns the cleaned XML document.
+    .EXAMPLE
+        $configs = Get-ChildItem -Path "C:\IvantiConfigs" -Filter "*.xml"
+        $xmlDocuments = $configs | ForEach-Object { ConvertFrom-IvantiBB -XmlFilePath $_.FullName }
 
-    [Parameter(Mandatory = $false)]
-    [String]$ModuleName = 'JBC.CitrixWEM'
-)
+        Processes multiple Ivanti Building Block XML files and returns an array of cleaned XML documents.
+    .OUTPUTS
+        System.Xml.XmlDocument
+    .NOTES
+        Function : ConvertFrom-IvantiBB
+        Author   : John Billekens Consultancy
+        Copyright: Copyright (c) AppVentiX
+        Version  : 1.0
+        Requires : Valid AppVentiX license
+#>
+function ConvertFrom-IvantiBB {
+    [CmdletBinding()]
+    [OutputType([System.Xml.XmlDocument])]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [ValidateScript({
+                if (-not (Test-Path -Path $_ -PathType Leaf)) {
+                    throw "File '$_' does not exist."
+                }
+                $true
+            })]
+        [string]$XmlFilePath
+    )
 
-#Requires -Version 5.1
+    process {
+        try {
+            # Resolve to full path and detect encoding
+            $ResolvedPath = Resolve-Path -Path $XmlFilePath -ErrorAction Stop
+            $DetectedEncoding = Get-FileEncoding -Path $ResolvedPath.Path
 
-if ($PSVersionTable.PSEdition -eq 'Desktop') {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'WindowsPowerShell\Modules')
-} elseif ($IsWindows) {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'PowerShell\Modules')
-} else {
-    $InstallPath = [System.IO.Path]::Combine($env:HOME, '.local/share/powershell/Modules')
+            # Read file content with detected encoding
+            $XmlContent = [System.IO.File]::ReadAllText($ResolvedPath.Path, $DetectedEncoding)
+
+            # Remove webtop elements
+            $XmlContent = $XmlContent -replace '<webtop>[\s\S]*?<\/webtop>', ''
+
+            # Parse and return XML
+            [xml]$XmlContent
+        } catch {
+            Write-Error "Failed to convert Ivanti Building Block file '$XmlFilePath': $_"
+            throw
+        }
+    }
 }
-
-$ExecutionPolicy = Get-ExecutionPolicy
-if (('PSEdition' -notin $PSVersionTable.Keys -or $PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) -and ($ExecutionPolicy -notin 'Unrestricted', 'RemoteSigned', 'Bypass')) {
-    Write-Host "Setting process execution policy to RemoteSigned" -ForegroundColor Cyan
-    Set-ExecutionPolicy RemoteSigned -Scope Process -Force
-} else {
-    Write-Host "Current execution policy: $ExecutionPolicy" -ForegroundColor Yellow
-}
-
-if (-not (Test-Path -Path $InstallPath)) {
-    Write-Host "Creating module path: $InstallPath" -ForegroundColor Cyan
-    New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
-}
-
-if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
-
-    # GitHub now requires TLS 1.2
-    # https://blog.github.com/2018-02-23-weak-cryptographic-standards-removed/
-    $CurrentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__, [Net.SecurityProtocolType]::Tls.value__)
-    $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $CurrentMaxTls }
-    $newTlsTypes | ForEach-Object {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
-    }
-
-
-    $Url = "{0}/{1}.zip" -f $Uri.TrimEnd('/'), $RemoteBranch
-    Write-Host "Downloading latest version of $ModuleName from $Url" -ForegroundColor Cyan
-    $File = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), "$ModuleName.zip")
-    $webclient = New-Object System.Net.WebClient
-    try {
-        $webclient.DownloadFile($Url, $File)
-    } catch {
-        Write-Host "Failed to download the file from $Url, Error $($_.Exception.Message)" -ForegroundColor Red
-        throw $_
-    }
-    Write-Host "File saved to $File" -ForegroundColor Green
-
-    $TempPath = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), [guid]::NewGuid().ToString())
-    Write-Host "Expanding $ModuleName.zip to $($TempPath)" -ForegroundColor Cyan
-    if (Test-Path -Path $TempPath) {
-        Remove-Item -Path $TempPath -Recurse -Force -ErrorAction Continue
-    }
-    New-Item -ItemType Directory -Force -Path $TempPath | Out-Null
-    Expand-Archive -Path $File -DestinationPath $TempPath -Force
-
-    #Extract module version from module manifest
-    $ModuleManifest = Get-ChildItem -Path $TempPath -Filter "$ModuleName*.psd1" -Recurse | Select-Object -First 1
-    if ($null -eq $ModuleManifest) {
-        Write-Host "Module manifest not found in $($TempPath)" -ForegroundColor Red
-        throw "Module manifest not found"
-    } else {
-        $ModuleInfo = Import-PowerShellDataFile -Path $ModuleManifest.FullName
-        $ModuleVersion = $ModuleInfo.ModuleVersion
-        Write-Host "Module version: $($ModuleVersion)" -ForegroundColor Green
-    }
-
-    if (Test-Path -Path "$($InstallPath)\$($ModuleName)") {
-        Write-Host "Removing any old copy" -ForegroundColor Cyan
-        Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Continue
-    }
-    Write-Host "Moving new module to $InstallPath" -ForegroundColor Cyan
-    Move-Item -Path "$($TempPath)\$($ModuleName)-$($RemoteBranch)\$($ModuleName)" -Destination $InstallPath -Force -ErrorAction Continue
-    Remove-Item -Path "$($TempPath)" -Recurse -Force
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
-} else {
-    Write-Host "Running locally from $($PSScriptRoot)" -ForegroundColor Cyan
-    Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Ignore
-    Remove-Item -Path "$File*" -Force -ErrorAction Ignore
-    Copy-Item -Path "$($PSScriptRoot)\$($ModuleName)" -Destination $InstallPath -Recurse -Force -ErrorAction Continue
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
-}
-Write-Host "Module has been installed, to import run `"Import-Module -Name $ModuleName -Force`"" -ForegroundColor Green
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAg0MU/5oI3/zl4
-# JyoyiLFcM+j1RW6lvL9WOF/tBKlRhaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBeh0AasYhAy6v7
+# DQjpWro0CAS/5lZvPcFP6TSvhRN4lqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -272,31 +239,31 @@ Write-Host "Module has been installed, to import run `"Import-Module -Name $Modu
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCB5UUOel2YULeIJ26wyJAooI7+VF/Hw0dy844VRMhZh
-# JTANBgkqhkiG9w0BAQEFAASCAYDEZqZoKp29Sbu8T0jOFIaCIJCXVoH18VlegnzS
-# a+8bWPgrxbhcZnXz0JtlqOIVeNTJvK6eyIEhr+2hxt36fnRKZUs5eRg22A/Mnp/3
-# Yi/03SxNGN3UzDPOFFoH5XVuAzHWAnCg2xugJ/kehyCHoU+qyqC7jnRJc+eWQaiy
-# jtCv6gUfaTrVFC9rMWAy8UnS2NYcJhnT1zErpfXq83Nf2QqX9hyJI95Rd8QhkiwL
-# j2da7oYMDHbE8OakinyOmSo+v1tp6vp1+MBVHgOyS85ReiAEdU2bwq/q4NiSmIiX
-# 1qXplyvMZze3mj7ra9WMzhg3odNSZB4ZKSKMy3JgJ/4eeKmRjynF8oSkEcX2mxuC
-# AtIWajf8q9115of2v5RbLcpfCJ34aFfdiswPmA1vlw8/9/PILi1ophB2QBv75zRk
-# cnCDNlv//ALpubyhEp3a4d4FqOjJyv9vJzCJWtuBJbiVCwR4iu9SRQC9V92oulzM
-# BiGNGx/dNKp9P5Rt3ouTMXrIaX+hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCD3QLDKnxQJfnWsGXEwnnj3KF7tgjSHw5XEa1X762qM
+# ojANBgkqhkiG9w0BAQEFAASCAYDCHUa7Nc6qBxTGLa+woezhDCV66PrD+jQvKyPa
+# /OzBDSInSzTLXEh4Km087P/mzcPwvwB3W6gBB37BsSJXvIw7+LeNSuA8ML9UlIS3
+# O7MD2SJFRLX0ptKTX90OMjvXag9sX9vEkA1RnaIpLTDufQKlVQiepI75gg6kOFVp
+# 4z+D6TQrjL2AHXJbFpw6VtjWmuQGH/LLjUAjJgdi2RpAHVcgHeW1ZfrbNqvkGCCP
+# u5/GEN7PvTxIAQ8eyQcwzQKlGzwVG2L5SAhbXmZC6fsJHL9/RamELr7JlJ4dAOrn
+# bl8lmyGSj1KhgiaZQNpmYnaFfJxPV04vbRwWm7fHah/yDzP3Vbd1/RijSRgkzciU
+# 3+QGaiKJr89VeXOrtA3rWk3+mI99Ao5wPds+MZrhzIXJhVPZmT8kOaf0/ALwRb0D
+# +fu8iCBQcvkrk0zdaEnlwpxQnkiHI0z3O+n9+N9p8SC8y3ngfYZYuHVjvab3zMoh
+# lP9RrbqPsiL7QsMNs1xXL29mMyGhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTIxODU1MDlaMD8GCSqGSIb3
-# DQEJBDEyBDDmY+xy3Q1wxDtzx75CDV6msESgT8C/FQ9RNEptWycR0FQYbd1bOljM
-# /QjonFwqwYIwDQYJKoZIhvcNAQEBBQAEggIAem7wk7Cny4VuPS00iUOtxHlMMUt0
-# bSN1vvz5m44W2LsXnwglFT/ZnPGcWl5DKyrowPKDWQJ0+N0x/5H60qo3/gix/+ha
-# EI+jax9Rluw1Bi9+WO/XTpj4Z1UU/sYLkSnCJMQcOtw9LVOWc6153v5butmLSsGC
-# sRXtMhf0f4OFSkzZFfCMc2Mo7LgS3hTjVLxteb+0iwqjGOLWB/gi6ItsjtLN3AoR
-# U/7fUJnCPceah2DRtVdimT3WtFzk2jG3nuShGwNg+uUwuuGaghFDGMBySsjd7WSC
-# R9KcUQjDMSuvpfYSovX4JmLcYldgcCQDx00NPvaEpBsqv6TusfRimjhl+FdIIno9
-# GnxWFQML4iv4sOvxdJX0dp372f1z5EsQDCais+c1nExv1Zrw1yQqApXxPvn1OnpF
-# Rwf3CijcxkK5EFAfngv8V5mueocqJB/lAavulfS8eHwKKZL+b4t2ATrSToH9Y39O
-# NbeCN95PAFUpvXbT7LWB5gB0TeRmyuXtpKNdgfI2ztQmLp0fFPTb0nEHGVMwiU8q
-# jlI07Kncnw33k9prt/6juAWEtT0acu7+jfc20SE07My1rvSd1ygdn/VE1A6LAtqL
-# 3NikWgL/hcU0YvsVM+7unR1l9GSFBpWVg6SCQ/9UPOD9vM2mSove042X77KwttT8
-# azkDBjDmDCEnOK0=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMDIxNjU0MjdaMD8GCSqGSIb3
+# DQEJBDEyBDAgfNA25KKJyt29n5jHhLjTbu46tfieJh6x1x4oSLfVktv064fDNJ0I
+# qLX7ztF7UpIwDQYJKoZIhvcNAQEBBQAEggIAvKZkYyk08vM838NNdGznC+2AblAQ
+# FQ1hewzUYIpM9vFe9atiVEzgtLbwY1sBEKsek/vfkhHHRdrSR62n2/mcQIVQIxBx
+# EftdV1BBw7DXaWcvlhd+g9K/Usp9Soe1KDpXnfvnKPT087Qf7w2TejNU1gDqye5r
+# GPTsdK4eTu54GOWJqjZ3RZLTTM6/h6ri1DCH+bPjPc8RlKcBiU6CE8hcCpv2Weke
+# 1bel3cbsNig6gOkry+pn/6GL1IZfVO3r6NVTSY/StvBqw74H+NkK4tajNMCDQzSw
+# 40K3kLsPWemr5nCbMlsI7uAkKGVK/vIuZwDi5CZYctvix3oTM8TPs53grVkUC1w5
+# yzFbd/nqPhbmTJKVsSfIffHrKWDwYxVvmLFEjbyU4NwXwKOWn//6ZrX/UhYG99uX
+# Bghuv6gR+JlGaULq0FtbzDeSnKun7oJqc4JJLkRm0z8TA1zzyKBFv55kK7LpVokD
+# qvYovJO69qOSEGYdilAMhwBVoqnPCfbB1SbfyPuZz/EYgK7ViLQV6pVKi5puBW+M
+# vhL3XHx92M6iarHGfiiW8aQG/mm2qo5/7BKTGWImqr8hmy7jL4Li2IhwF/LQV0oC
+# cCL3ivhnW5DxZxx0wmx47gnTUJZM5v1oAzr97/nerMbzz7y0t6wjVL0p0dZhpyqi
+# x01L8c/bmguf5wM=
 # SIG # End signature block

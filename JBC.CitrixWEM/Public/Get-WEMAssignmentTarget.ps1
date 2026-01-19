@@ -1,4 +1,4 @@
-function Get-WEMAssignmentTarget {
+﻿function Get-WEMAssignmentTarget {
     <#
     .SYNOPSIS
         Retrieves assignment targets (users/groups) from a WEM Configuration Set.
@@ -44,19 +44,20 @@ function Get-WEMAssignmentTarget {
         $Method = ''
         $Body = $null
 
-        if ($Connection.IsOnPrem) {
-            $UriPath = "services/wem/cachedAdObject/assignmentTarget/`$query"
-            $Method = "POST"
-            $Body = @{
-                filters = @(
-                    @{
-                        param    = "SiteId"
-                        operator = "Equals"
-                        value    = $ResolvedSiteId
-                    }
-                )
-            }
-        } else {
+        #Get-WEMAssignmentTarget due to error didsable on-prem POST method temporarily, as it seems to use the same path as cloud
+        #if ($Connection.IsOnPrem) {
+        #    $UriPath = "services/wem/cachedAdObject/assignmentTarget/`$query"
+        #    $Method = "POST"
+        #    $Body = @{
+        #        filters = @(
+        #            @{
+        #                param    = "SiteId"
+        #                operator = "Equals"
+        #                value    = $ResolvedSiteId
+        #            }
+        #        )
+        #    }
+        #} else {
             $UriPath = "services/wem/assignmentTarget/`$query"
             $Method = "POST"
             $Body = @{
@@ -68,7 +69,7 @@ function Get-WEMAssignmentTarget {
                     }
                 )
             }
-        }
+        #}
 
         $Result = Invoke-WemApiRequest -UriPath $UriPath -Method $Method -Connection $Connection -Body $Body
         $InitialTargets = @($Result | Expand-WEMResult)
@@ -102,8 +103,8 @@ function Get-WEMAssignmentTarget {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCfSg9i+ywBgXXM
-# as74cNtCi+WVsAbQnL8SzJAApyQoraCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCL02i1O5KZ7wXv
+# TrN8O8nZ2kfR/VtveQV+aYQnrgJMBaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -279,31 +280,31 @@ function Get-WEMAssignmentTarget {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDjtxb+d2xRcboTJeLmjDmxmRsCKWtEZSKf9zWZsWRQ
-# SzANBgkqhkiG9w0BAQEFAASCAYA2ax2QUUkwGUcJxZUbCwFMsVCPxmI8MmUGgmBy
-# TfS0MFYxCtPiD1qj8M3/H+b1QLhKB2B/3aPT9fPqeU0eSC2eU/X0km1DDPv+CyXI
-# U0oCleTcUrBnnI2xolw2kdj1YN6ybtFQwnLyrMtQ1l7cdLAgycZt5jNw+IYSqEUY
-# Spxs5u7AOxnsB+yYrwGKL9znG5LlmDhnkKEiqkXdfcVYOQz6KsnhQNBeGJM4sUj7
-# oD03cPjgvMn2trXicfOINjY0G9lHVfbbPP8KEH++cXaF8IJEc+DSxIRs7uQVtpu1
-# tNEiLR5x5hLqfRE/z1z7LlydMHRas1S/qQWCj0aiCpZfZGKfYuo3BgeXBtk+Pdhc
-# NU8238UqAr3A5bzCrvEe4skpdX0L8kyj+REIr32tNC6IZunex77MFcwKnbdQaTJs
-# xKmT15U0mYYzwEvcLi4G9LmOcn9f8i/BwzE0767g9BM5XleaCSS6MKiAkWOzW/vi
-# gkhZoBfSb/q8+bExnK6tusWkDTahggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDl5aYWoxsWz7Xdfi0ZYLyJd25nMweCbbuD5ZyZMgar
+# qzANBgkqhkiG9w0BAQEFAASCAYCQryaPqPccCDaJZFRmk88NpHUhCx1V22ZbiHhR
+# rgZ6NxCKCDTx76N5WMPT/E4RbpKq7OHqHuPiVLoqmxl1pOtFtTYJ8qsvjEEipEMn
+# t9B3LeRJ9y2lx5nM2lQQ2V4FR9VxePnrIhpqjvDGxqyu9+FN31iLpGnsH5Rg1HEA
+# hExRGtAzHrX1+2rQmja6szJ8DL6EAlVENSU0jngDY94Wn9cmR6aJfqdoso2IC5Y1
+# x0C9t7MDWJu5LJUZAuq0zkrDt1Qa9iycxE9OKaTMCM4MtQNzmCgdann/QcgvCzfP
+# gKg1/0SH3nD5mKnRp8X0bghf1JFl4t8VKQ301o6p9Jt6SBRGhchfev36V4tbfodS
+# ihm+1G7Ji2RqtPPRi+pirdMlxwSVoUF7Uaq1ysoAzdIFe4JAXsSk/fNVmf1Wceq+
+# lsFps2hedVNozIis8eCoTsxHBFLMn0Io6Xk8d3colQ6hieyzT/KAxt42ywSoWoVL
+# vriHmlAmxkaVGZMrT/tS9hYdddOhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU3MTZaMD8GCSqGSIb3
-# DQEJBDEyBDB7gx050CwIRoxbXLQu8lnD8L1hPn9UZJCDFjLoSc/yTUq/UBPeUiak
-# eR70H2EiEmEwDQYJKoZIhvcNAQEBBQAEggIAmCddl7/kk8Gtf7hME4ZX447qWqie
-# xmKwAsJnRsmaVTEbL3uwQUsC8M7e+xBcZd6DwgsjQCZkArLLGLeHz1DOJ+Axkvyz
-# EGxeQyR4eD964Ymv15b7sEglnUcvxGRaS3XTFFMTqUg6l+ia0ESiAJsGo8WRTllO
-# C1dCJVuguMHQ2KanjccGmi07QvPg81vg8dEuAdZ4ah9RBvdLbLHJA0RuQ15RwS/X
-# rfm9YOJxU2AFuWjnHIExp8y2fh3lnewC0+mFR9p0fDOulaDcJASpvtb8gK19Cfu5
-# 7pX5GAgOiJXLgDY3WWNUziehrI+dTisnYr5F6yb7Ps1RzRH/k9ZtHXuC008t5Tn5
-# loaCA5aow9VeFsKAUGznlwQfYCjRhoxQo/u1OBD2jE365/JtUD7j7RmO9tcqsvOh
-# UFvOoEq2vHmowILrRSfqjn0EB7LhZ9oRrR+op2Au2jb/ToN7B0rGeKDbD9fth+hb
-# 36ibb81CGnHz+EMCv5eLGFoJC03JH/LAJTPcaYSq64odqRo9W+jgfx84TUn9PAXb
-# VYxnDUnxkJpHd9PLIJiDBvH+umGu2OZS84X3FfR1dbDNPqxnPwUjE9dNJxhH8ByL
-# 0Cl0/paYgMUvSG4xhWzaOHjZSGWpvkmxbiHhKde63Y9s2wziPCQYqHqQLGUkeptq
-# N46KUHsPEM3J/mQ=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxOTEzMjNaMD8GCSqGSIb3
+# DQEJBDEyBDDPjA4Ei6xrcJAwpNEzVnBZA7BkzpcBxA2IpdcN0BTBtDlo6YgH5YWp
+# mmyfNJ9ART8wDQYJKoZIhvcNAQEBBQAEggIABCA1hNrYbRru+2M4AC8ijjQvBV/H
+# 0C075TBEMNifwZ8PxUax3r3ty5gOiW3JT/0Z2XATEoNYO57T3ItZ4CNpp11gD1Rs
+# TWNYocQl4ulgyz1Q4HigKHCFS52GOixuZ+9OZ87NYP8Di+NZ1HrMiF7ppvYQBOp2
+# oKYt8ca65tT9xjQBN2YtcbR6WFdYij03XPmNDfNpvM3CrTOY3xK94egAeKmNMygV
+# pFW383Blm+5a8K6MKKaSGZGHdyiI+LfaQNxDmilAUOif8gvPmetJJwowxLmDOcze
+# 1GIM9S70cGyOTSCn7fc3/Tt6A9esndfpfzG37LP6IrQKf0W4ZJAm7c+WX24WeVMo
+# RQ/wWuERY5LR0KwRPbLixr52OIzrMOWHcjeTXbgJMmLZZ8mAi+I3ouYZekiij57F
+# 0Ade8jgzx2hTsBEdOcosDBw6ujnT3e04tqCzhp9+6Re6GIqkJHp04g0rWn6dtA3e
+# ngauuP2m2vPP4rugxmY7ilONnzs/OTFNx7C9JTneidFGjfGmGikKrY2RLN2f3N2p
+# TnLmqo5mFN7NALRrjxjON0A8+tlwWDjkZ2wZYWdTKsky/IZ21J1xaQjgRgN5E+6X
+# Bh8ebn6my17bMcruCMGLXxNzPEzDwSGzWOcKyURI3R3D1pxc5fdF0mOOvy3qJAQF
+# 7T43oOnd0Eyl9RY=
 # SIG # End signature block

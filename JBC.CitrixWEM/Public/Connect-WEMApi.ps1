@@ -1,4 +1,4 @@
-function Connect-WEMApi {
+﻿function Connect-WEMApi {
     <#
 .SYNOPSIS
     Authenticates to the Citrix WEM API (Cloud or On-Premises) and establishes a session.
@@ -57,7 +57,7 @@ function Connect-WEMApi {
 
         [Parameter(Mandatory = $false, ParameterSetName = 'ApiCredentials')]
         [Parameter(Mandatory = $false, ParameterSetName = 'Sdk')]
-        [ValidateSet("eu", "us", "jp")]
+        [ValidateSet("eu", "us", "jp", "ap")]
         [string]$ApiRegion = "eu",
 
         # --- On-Premises Parameters ---
@@ -88,8 +88,16 @@ function Connect-WEMApi {
         BearerToken  = $null
         WebSession   = New-Object Microsoft.PowerShell.Commands.WebRequestSession
         CloudProfile = $null
+        Expiry       = [datetime]::Now.AddSeconds(-1)
+        IsConnected  = $false
     }
     $LocalConnection.WebSession.UserAgent = "CitrixWEMPoShApi/1.4)"
+    $ApiRegionMap = @{
+        "eu" = "api-eu.cloud.com"
+        "us" = "api-us.cloud.com"
+        "jp" = "api.citrixcloud.jp"
+        "ap" = "api-ap.cloud.com"
+    }
 
     try {
         # Disconnect any existing session before creating a new one
@@ -172,6 +180,11 @@ function Connect-WEMApi {
                     $LocalConnection.CustomerId = "$($ApiCredentials.CustomerId)"
                     $LocalConnection.CloudProfile = $ApiCredentials.ProfileName
                 }
+                if (-not [string]::IsNullOrEmpty($($TokenResponse.expires_in))) {
+                    $LocalConnection.Expiry = [datetime]::Now.AddSeconds($TokenResponse.expires_in)
+                } else {
+                    $LocalConnection.Expiry = [datetime]::Now.AddMinutes(15)
+                }
                 Write-Verbose "Successfully connected using Citrix SDK session for Customer ID: $($LocalConnection.CustomerId) in region $($ApiRegion.ToUpper())"
                 $IsConnected = $true
             } else {
@@ -183,24 +196,37 @@ function Connect-WEMApi {
                     $ClientSecret = $CredentialPopup.Password
                 }
 
-                $Uri = "https://api-{0}.cloud.com/cctrustoauth2/root/tokens/clients" -f $ApiRegion
-                $Body = @{
-                    clientId     = $ClientId
-                    clientSecret = ([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ClientSecret)))
+                $tokenUrl = "https://{0}/cctrustoauth2/root/tokens/clients" -f $ApiRegionMap[$ApiRegion.ToLower()]
+                $TokenResponse = $null
+                $response = $null
+
+                $response = Invoke-WebRequest $tokenUrl -Method POST -UseBasicParsing -Body @{
+                    grant_type    = "client_credentials"
+                    client_id     = $ClientId
+                    client_secret = ([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ClientSecret)))
                 }
-                $TokenResponse = Invoke-RestMethod -Uri $Uri -Method Post -Body (ConvertTo-Json -InputObject $Body) -ContentType "application/json"
-                if ("$($TokenResponse.token)" -notlike "CWSAuth bearer=*") {
-                    $LocalConnection.BearerToken = "CWSAuth bearer=$($TokenResponse.token)"
-                } else {
-                    $LocalConnection.BearerToken = $($TokenResponse.token)
+                if ($response.StatusCode -ne 200) {
+                    throw "Failed to obtain Bearer Token from Citrix Cloud API. Status Code: $($response.StatusCode)"
+                }
+                try {
+                    $TokenResponse = $response.Content | ConvertFrom-Json
+                } catch {
+                    throw "Failed to parse Bearer Token response from Citrix Cloud API."
                 }
 
-                $LocalConnection.BearerToken = "CWSAuth bearer=$($TokenResponse.token)"
+                if ($TokenResponse.access_token -notlike "CWSAuth bearer=*") {
+                    $LocalConnection.BearerToken = "CWSAuth bearer=$($TokenResponse.access_token)"
+                } else {
+                    $LocalConnection.BearerToken = $($TokenResponse.access_token)
+                }
                 Write-Verbose "Successfully connected using API Credentials for Customer ID: $($LocalConnection.CustomerId) in region $($ApiRegion.ToUpper())"
                 $IsConnected = $true
             }
         }
 
+        if ($IsConnected) {
+            $LocalConnection.IsConnected = $true
+        }
         $script:WemApiConnection = $LocalConnection
 
         try {
@@ -246,8 +272,8 @@ function Connect-WEMApi {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCOqQtOVzSI46z7
-# g2UUPW00IrI5OIVxhl8955ZBUyT+rKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCN7+JvafrYqrB7
+# SuNSGAnPjaNA9RAzLJnhFLqATBM+GKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -423,31 +449,31 @@ function Connect-WEMApi {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBmBffRdYWKWu45hZm0YbMJWFns2Tvs0kJIvcLnbFE9
-# 1TANBgkqhkiG9w0BAQEFAASCAYAnbDCMOlOXRLMpx/JnOLAdiFkSGm5hhYwGb2DK
-# Ez7fBVNOQkdvRWg4k1AYHFSlZWNWz1n+J+YpqCOrtomi2cn7KbQ8sjVdfN0H8UDm
-# i57liPuScp3WFOyf2GqlohP2iDXXxRulrmRHHcsZJW7CXNdIYA8UPtkxkinP7dwU
-# iu/xY1ujfeVG4TBxu4lmbWvb8b3JGpGVCM4QBdT9vN4RYOv8cPgg64vFxjCbR3ap
-# GM341bYzzsj+zvuWSfsFL8+qQzvq3mEdP9ae4gFkDnC/xr2anVA+j7aStfZeBGzz
-# ius64zeNfhzTW3fUu7hqkNxyimpCgkCb12ThWcBOJSqK6Zn57hNJXwwqrhuUgrpU
-# DXtRg6b280BanAw+lo0w0DSF5PxFdRcybv56Ic6fNwdqbrh38Iafcv8k7EFR/vBm
-# P4x3+fdjaKnn2eGOP0rGqirGKfpQ/D95zVAcDmTBVguR4qpQjlUbwAhWFtUKFsuD
-# 9a2vFZl13TrEJYMCYG0AiJ2sZ6ihggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCChRGH9E+u+zfKXwAQGKhwt6F15wDVoaZX0V4CeSgok
+# VDANBgkqhkiG9w0BAQEFAASCAYBIAeVNV+TrMCaoJlB7/WRdJSNsE6sMctbI+m/L
+# E9/2DkPPQ/BcDB9d/CCqy8vktUtgqTIO5VOx2vsVPRJIGv9AnEa2sUnRHPo+dZ1b
+# 9HzhWMt4/u5WL50EKVW8ZyTBP/bGiMN8Faslk9TN3NwEnlHnZQEgVqmcVVam6fTK
+# jn2BKkP17vWfyvRwVcfuDTShJQtpyfr5gQCkDegebW3h2EkXiXS5Ph9amJ1+ks8A
+# JMk6iWfPnZRi6FqdjJm90U0oJQjdOEIbupXIdnT7LEnaI3vg4REgOtVlJgpagzHE
+# vLH9RnLf4HGudZ+g4bFtWc3fUUX/nkH7G54QETgvgL9Z/Ce1NvBqu1U9ZCUN6Zdy
+# gVG+bttvRRM+Wiwnd+MN8bsvBaePKpCEoH0ohI45qJStKTDHh7VE6OdbIPWfWqA0
+# Cs4XGhQO8GRbV+o+ZpDQNzpifmeyF1zmK41YMnbV7INpqIYBg9KuxLkJKw4xfoQ7
+# yyiuQTswofU0p6JXtFnB+MRnjvOhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMTQzMThaMD8GCSqGSIb3
-# DQEJBDEyBDBUTx5J/Jyta30U32lUdHdSCdGgzG3iXJIkZiz9m9EoeUlCP6TiCExx
-# 8ljIhtwnKjUwDQYJKoZIhvcNAQEBBQAEggIAwLe/vWkgiKgdjHu0B9AtxGv099xN
-# r50RrpvggMhvrpaqFsxG2HFE3EAlXsCrhrTuVEUNALRqTKNWW+ZjrLDtz6EEpWfW
-# yObSGIAQsg5X+tNftPW2ExTs+Ja+9s8GVgBMorgx/j2HBp71yoQg9jXHizj5F03f
-# IjLk5TN4kgwb/vNLIHU4Y8ATe6m3aUG+ttGQowZ0foLyEEt6OHDscw2lxpV3UDtS
-# Xn8s/lgJY0Bj72cWge0tPWtw6UoN2pN6nY4mPFW0gHYBOdoOxvxGrpZk0uCRTQ2R
-# wic+HrgBG+dMhNNO5SwZi/k/S4djN0f1jdh/yJT72kP/Z9STl07R4Nz7wAMSLGBV
-# hxjYXD3xCVTSuVetMDCD7IZiFqHAvrO8jTFlEN9hZ7Kgw9MeohrcKqPtJ3WbIXRE
-# K2sOHSrz5mtp133CcIcNa0Bh3+Vxi0Dw4t7e0HF496X2lHsAp/W6lBM4ArXxRvCK
-# r1w8MujSoLlxziJBbA0iWW7enIzVshE/UIc2S4PHOtvv9GxbS676bAbpMcCa9nhQ
-# ajHoPp6PyRHFW27H7dgeHfmMQuGHcGtaY1Qrxmti+LSMhqf3QemrpABLYMYWPKX5
-# xCXASEEuIn5sMDJXuoeTFlTbwJUb/TFtYl3r0butqRm9BD94LWdXXGAoXYrY4mbg
-# EM3ZeZ/QRVoIjhk=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxODU1MjlaMD8GCSqGSIb3
+# DQEJBDEyBDBrMSI0kOhlmVdwp4WCs8lM9OHAPtXNGZj/FNzS52KTQQa1+8tjb+/r
+# VBnX1NWPXEAwDQYJKoZIhvcNAQEBBQAEggIAVdnz+hkqvQAofzpWLUdpu+BaNf8W
+# FW2M67sFIHcdVnGORm7A7VrB3tN5D4pcXyLPgNcN79HbrJ+mAKhZyMdpMH2aDqRZ
+# svhnDzQjxveC2Q6OtwA1qv3Z5HJNfmtQQ5rO/5ZvGXYFjZCv38gtfE+tFdxXnkm7
+# wbJDhNOupeBwENkUQk1mYrJznifemkq4BSo/gSgj/xUycEF0PcQN0fJwfmtSEmW1
+# G4pJHrEO7BUJN0elY9vTluPf7HothdCgqnfiTgnMlv4VTeP0WVBoRxYAzCgIN12L
+# b4Oem/yvjlNb4yJ4faTH381XBRPgy8iQu6rlzD4CksWpnS81tHBEjJhqPwHJ0BZE
+# BrLOkb5Lmlz6e/crwHJH+C8WqTybyq8HJKbdEgdxxzrUECjBrU0Mxj6VmOGMbbyF
+# OwZ2cs43/RoAvOj937V4K1H6spYs13v9UzOfdrhcdkZuKb1V9pR8qf5mRb50HWa+
+# dpr2OOYcKPLcJG4YHqDDLmHwtcyvuMzSaU49gt+QHS5H2qj18RknhFWFnRpRbTrO
+# exanLKdaeARkFdZDYCPJxxVdIIWhWkBxdyFFnNAHDnuaUXROwSpVgCJc1UvLf0R5
+# BtRI6yo0my4fGIEEpw56WAyeeCZylk30N9OqH+i6ivPZXez2Y1Y2ciFgR6ZQLk2B
+# p6zjg+i/ddxnPsA=
 # SIG # End signature block

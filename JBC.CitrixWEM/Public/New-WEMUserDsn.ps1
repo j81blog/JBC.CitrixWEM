@@ -1,102 +1,135 @@
-[CmdletBinding()]
-param(
-    [Parameter(Mandatory = $false)]
-    [string]$remoteBranch = 'main',
+﻿function New-WEMUserDsn {
+    <#
+    .SYNOPSIS
+        Creates a new User DSN action in a WEM Configuration Set.
+    .DESCRIPTION
+        This function adds a new User DSN (Data Source Name) action. If -SiteId is not specified, it uses
+        the active Configuration Set defined by Set-WEMActiveConfigurationSite.
+    .PARAMETER Name
+        The unique name for the User DSN action.
+    .PARAMETER DsnName
+        The name of the Data Source Name (DSN) to be created.
+    .PARAMETER ServerName
+        The server name for the DSN connection.
+    .PARAMETER DatabaseName
+        The database name for the DSN connection.
+    .PARAMETER Description
+        An optional description for the User DSN action.
+    .PARAMETER Enabled
+        Whether the action is enabled. Defaults to $true.
+    .PARAMETER RunOnce
+        If specified, the action will only run once per user session.
+    .PARAMETER UsingExtraCredential
+        If specified, additional credentials will be used for the DSN connection.
+    .PARAMETER UserName
+        The username for DSN authentication (requires UsingExtraCredential).
+    .PARAMETER UserPassword
+        The password for DSN authentication (requires UsingExtraCredential).
+    .PARAMETER SiteId
+        The ID of the WEM Configuration Set. Defaults to the active site.
+    .PARAMETER PassThru
+        If specified, the command returns the newly created User DSN object.
+    .EXAMPLE
+        PS C:\> New-WEMUserDsn -Name "Sales DB" -DsnName "SalesData" -ServerName "SQL01" -DatabaseName "SalesDB"
 
-    [Parameter(Mandatory = $false)]
-    $uri = 'https://github.com/j81blog/JBC.CitrixWEM/archive',
+        Creates a new User DSN action named "Sales DB" that creates a DSN called "SalesData".
+    .NOTES
+        Version:        1.0
+        Author:         John Billekens Consultancy
+        Creation Date:  2026-01-18
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([PSCustomObject])]
+    param(
+        [Parameter(Mandatory = $false)]
+        [int]$SiteId,
 
-    [Parameter(Mandatory = $false)]
-    [String]$ModuleName = 'JBC.CitrixWEM'
-)
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
 
-#Requires -Version 5.1
+        [Parameter(Mandatory = $true)]
+        [string]$DsnName,
 
-if ($PSVersionTable.PSEdition -eq 'Desktop') {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'WindowsPowerShell\Modules')
-} elseif ($IsWindows) {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'PowerShell\Modules')
-} else {
-    $InstallPath = [System.IO.Path]::Combine($env:HOME, '.local/share/powershell/Modules')
-}
+        [Parameter(Mandatory = $true)]
+        [string]$ServerName,
 
-$ExecutionPolicy = Get-ExecutionPolicy
-if (('PSEdition' -notin $PSVersionTable.Keys -or $PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) -and ($ExecutionPolicy -notin 'Unrestricted', 'RemoteSigned', 'Bypass')) {
-    Write-Host "Setting process execution policy to RemoteSigned" -ForegroundColor Cyan
-    Set-ExecutionPolicy RemoteSigned -Scope Process -Force
-} else {
-    Write-Host "Current execution policy: $ExecutionPolicy" -ForegroundColor Yellow
-}
+        [Parameter(Mandatory = $true)]
+        [string]$DatabaseName,
 
-if (-not (Test-Path -Path $InstallPath)) {
-    Write-Host "Creating module path: $InstallPath" -ForegroundColor Cyan
-    New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
-}
+        [Parameter(Mandatory = $false)]
+        [string]$Description = "",
 
-if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
+        [Parameter(Mandatory = $false)]
+        [bool]$Enabled = $true,
 
-    # GitHub now requires TLS 1.2
-    # https://blog.github.com/2018-02-23-weak-cryptographic-standards-removed/
-    $CurrentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__, [Net.SecurityProtocolType]::Tls.value__)
-    $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $CurrentMaxTls }
-    $newTlsTypes | ForEach-Object {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
-    }
+        [Parameter(Mandatory = $false)]
+        [switch]$RunOnce,
 
+        [Parameter(Mandatory = $false)]
+        [switch]$UsingExtraCredential,
 
-    $Url = "{0}/{1}.zip" -f $Uri.TrimEnd('/'), $RemoteBranch
-    Write-Host "Downloading latest version of $ModuleName from $Url" -ForegroundColor Cyan
-    $File = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), "$ModuleName.zip")
-    $webclient = New-Object System.Net.WebClient
+        [Parameter(Mandatory = $false)]
+        [string]$UserName = "",
+
+        [Parameter(Mandatory = $false)]
+        [string]$UserPassword = "",
+
+        [Parameter(Mandatory = $false)]
+        [switch]$PassThru
+    )
+
     try {
-        $webclient.DownloadFile($Url, $File)
+        # Get connection details. Throws an error if not connected.
+        $Connection = Get-WemApiConnection
+
+        $ResolvedSiteId = 0
+        if ($PSBoundParameters.ContainsKey('SiteId')) {
+            $ResolvedSiteId = $SiteId
+        } elseif ($Connection.ActiveSiteId) {
+            $ResolvedSiteId = $Connection.ActiveSiteId
+            Write-Verbose "Using active Configuration Set '$($Connection.ActiveSiteName)' (ID: $ResolvedSiteId)"
+        } else {
+            throw "No -SiteId was provided, and no active Configuration Set has been set. Please use Set-WEMActiveConfigurationSite or specify the -SiteId parameter."
+        }
+
+        if ($PSCmdlet.ShouldProcess($DsnName, "Create WEM User DSN '$($Name)' in Site ID '$($ResolvedSiteId)'")) {
+            $Body = @{
+                actionType           = "CreateOrModifyDsn"
+                siteId               = $ResolvedSiteId
+                name                 = $Name
+                description          = $Description
+                enabled              = $Enabled
+                dsnName              = $DsnName
+                serverName           = $ServerName
+                databaseName         = $DatabaseName
+                runOnce              = $RunOnce.ToBool()
+                usingExtraCredential = $UsingExtraCredential.ToBool()
+                userName             = $UserName
+                userPassword         = $UserPassword
+            }
+
+            $UriPath = "services/wem/action/userDsn"
+            $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
+
+            if ($PassThru.IsPresent) {
+                Write-Verbose "PassThru specified, retrieving newly created User DSN..."
+                # Use the unique Name property for a reliable lookup.
+                $Result = Get-WEMUserDsn -SiteId $ResolvedSiteId | Where-Object { $_.Name -ieq $Name }
+            }
+
+            Write-Output ($Result | Expand-WEMResult -ErrorAction SilentlyContinue)
+        }
     } catch {
-        Write-Host "Failed to download the file from $Url, Error $($_.Exception.Message)" -ForegroundColor Red
-        throw $_
+        Write-Error "Failed to create WEM User DSN '$($Name)': $($_.Exception.Message)"
+        return $null
     }
-    Write-Host "File saved to $File" -ForegroundColor Green
-
-    $TempPath = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), [guid]::NewGuid().ToString())
-    Write-Host "Expanding $ModuleName.zip to $($TempPath)" -ForegroundColor Cyan
-    if (Test-Path -Path $TempPath) {
-        Remove-Item -Path $TempPath -Recurse -Force -ErrorAction Continue
-    }
-    New-Item -ItemType Directory -Force -Path $TempPath | Out-Null
-    Expand-Archive -Path $File -DestinationPath $TempPath -Force
-
-    #Extract module version from module manifest
-    $ModuleManifest = Get-ChildItem -Path $TempPath -Filter "$ModuleName*.psd1" -Recurse | Select-Object -First 1
-    if ($null -eq $ModuleManifest) {
-        Write-Host "Module manifest not found in $($TempPath)" -ForegroundColor Red
-        throw "Module manifest not found"
-    } else {
-        $ModuleInfo = Import-PowerShellDataFile -Path $ModuleManifest.FullName
-        $ModuleVersion = $ModuleInfo.ModuleVersion
-        Write-Host "Module version: $($ModuleVersion)" -ForegroundColor Green
-    }
-
-    if (Test-Path -Path "$($InstallPath)\$($ModuleName)") {
-        Write-Host "Removing any old copy" -ForegroundColor Cyan
-        Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Continue
-    }
-    Write-Host "Moving new module to $InstallPath" -ForegroundColor Cyan
-    Move-Item -Path "$($TempPath)\$($ModuleName)-$($RemoteBranch)\$($ModuleName)" -Destination $InstallPath -Force -ErrorAction Continue
-    Remove-Item -Path "$($TempPath)" -Recurse -Force
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
-} else {
-    Write-Host "Running locally from $($PSScriptRoot)" -ForegroundColor Cyan
-    Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Ignore
-    Remove-Item -Path "$File*" -Force -ErrorAction Ignore
-    Copy-Item -Path "$($PSScriptRoot)\$($ModuleName)" -Destination $InstallPath -Recurse -Force -ErrorAction Continue
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
 }
-Write-Host "Module has been installed, to import run `"Import-Module -Name $ModuleName -Force`"" -ForegroundColor Green
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAg0MU/5oI3/zl4
-# JyoyiLFcM+j1RW6lvL9WOF/tBKlRhaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCA+GpsF372Q7KTA
+# mKcBOZXk0tF2XCq182gS5Xrw2lxUf6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -272,31 +305,31 @@ Write-Host "Module has been installed, to import run `"Import-Module -Name $Modu
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCB5UUOel2YULeIJ26wyJAooI7+VF/Hw0dy844VRMhZh
-# JTANBgkqhkiG9w0BAQEFAASCAYDEZqZoKp29Sbu8T0jOFIaCIJCXVoH18VlegnzS
-# a+8bWPgrxbhcZnXz0JtlqOIVeNTJvK6eyIEhr+2hxt36fnRKZUs5eRg22A/Mnp/3
-# Yi/03SxNGN3UzDPOFFoH5XVuAzHWAnCg2xugJ/kehyCHoU+qyqC7jnRJc+eWQaiy
-# jtCv6gUfaTrVFC9rMWAy8UnS2NYcJhnT1zErpfXq83Nf2QqX9hyJI95Rd8QhkiwL
-# j2da7oYMDHbE8OakinyOmSo+v1tp6vp1+MBVHgOyS85ReiAEdU2bwq/q4NiSmIiX
-# 1qXplyvMZze3mj7ra9WMzhg3odNSZB4ZKSKMy3JgJ/4eeKmRjynF8oSkEcX2mxuC
-# AtIWajf8q9115of2v5RbLcpfCJ34aFfdiswPmA1vlw8/9/PILi1ophB2QBv75zRk
-# cnCDNlv//ALpubyhEp3a4d4FqOjJyv9vJzCJWtuBJbiVCwR4iu9SRQC9V92oulzM
-# BiGNGx/dNKp9P5Rt3ouTMXrIaX+hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCCAt1j/zM/90b3hCLQ4gZL8U5826BFlfcTOPPIqdue2
+# GzANBgkqhkiG9w0BAQEFAASCAYDJBArt1rtZ6lcPB3z9zSilD0QJY7VGKw8hpBcf
+# pRgIQzs7vGnr/jXOWrT7l7v1K9Gus65ehrqHYlxOT8q0Ha27UyWDda0t1w+mjxio
+# JXxpEPrSuS4vdQC+LKoVJc2xsEwgUac9NefvnFgvyEx5SemwSEjz7/+qapGruweA
+# jF1i3XLdobxP/aFUcjKsislyRnqGSKX/fFe/35EPefAqYSbLja7RN8spyigQVRq3
+# 4rJ1umMvOiNJITjSdhveKgO3ONZS9N8aR4cJFiBLv4bqIjiyEoc6tS9Y1B+khf0d
+# hUt8sA4H15ifIdOmFeWXKmr8qWeerZsN7AoQERH50zLt6zrQkFm0+7S4BO6JL4Yv
+# Tm41KNE+PawrJbP/DwIitppF3effc/n03TCqS+5IGihVqovVmNbrq7BtYLEQnrH0
+# aTJ6hJit4WdVg3ID0e7iLqKDX+JJ30F2yPWnLh6t2LS3dFD2U+hQzqYD2m211aNl
+# 8qCU/ZYoSWTB8PTsvchRFx6Y0eOhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTIxODU1MDlaMD8GCSqGSIb3
-# DQEJBDEyBDDmY+xy3Q1wxDtzx75CDV6msESgT8C/FQ9RNEptWycR0FQYbd1bOljM
-# /QjonFwqwYIwDQYJKoZIhvcNAQEBBQAEggIAem7wk7Cny4VuPS00iUOtxHlMMUt0
-# bSN1vvz5m44W2LsXnwglFT/ZnPGcWl5DKyrowPKDWQJ0+N0x/5H60qo3/gix/+ha
-# EI+jax9Rluw1Bi9+WO/XTpj4Z1UU/sYLkSnCJMQcOtw9LVOWc6153v5butmLSsGC
-# sRXtMhf0f4OFSkzZFfCMc2Mo7LgS3hTjVLxteb+0iwqjGOLWB/gi6ItsjtLN3AoR
-# U/7fUJnCPceah2DRtVdimT3WtFzk2jG3nuShGwNg+uUwuuGaghFDGMBySsjd7WSC
-# R9KcUQjDMSuvpfYSovX4JmLcYldgcCQDx00NPvaEpBsqv6TusfRimjhl+FdIIno9
-# GnxWFQML4iv4sOvxdJX0dp372f1z5EsQDCais+c1nExv1Zrw1yQqApXxPvn1OnpF
-# Rwf3CijcxkK5EFAfngv8V5mueocqJB/lAavulfS8eHwKKZL+b4t2ATrSToH9Y39O
-# NbeCN95PAFUpvXbT7LWB5gB0TeRmyuXtpKNdgfI2ztQmLp0fFPTb0nEHGVMwiU8q
-# jlI07Kncnw33k9prt/6juAWEtT0acu7+jfc20SE07My1rvSd1ygdn/VE1A6LAtqL
-# 3NikWgL/hcU0YvsVM+7unR1l9GSFBpWVg6SCQ/9UPOD9vM2mSove042X77KwttT8
-# azkDBjDmDCEnOK0=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTkwNzQ5MDBaMD8GCSqGSIb3
+# DQEJBDEyBDB1zKogqwMPJ6lSOWYigIqkTrB+opjdHfphzw/LX2NWZwoB3CRXdo0m
+# WvVXqs0DNEIwDQYJKoZIhvcNAQEBBQAEggIAKQ/aXY0iTPiRK1Etzym4P+6tiGKa
+# sV8Y+OpITa6q+jbrBc3m7u9I5hGQNvwkxg6ud+46IQtgQ9VH4kTuDMd7qImSsR/N
+# /NrLV6qsp37Y3dZWtMlry2zPyvUWUA89XtOFbnVs2cDSnZYBU2pwKux9W3zQR71o
+# uGN9Cl8X9XWJFjDXNkSV/smLIH4EYyxhayX2/3lR+vF0w5G17+GO1oXAB/PPbtbo
+# ZK/C5/UDwfQm3inbbmWcWtxTlZUYy6tav/8S61uxLHukbTe+dW/0XMxsWMqruMYv
+# IQgCScTyOo3VUmAGJ5fD8LHHHcP5Evvo1Xp9R/aJrDzkvPXDCtaLr4dMXA9gzlgM
+# +1Zpc9vTzrGTh4uioG3NbswJmU+uP9b7pnLGwqNJ9+GKL/eDXThFoyASAwaWKVoQ
+# +zIfosqml4nWIq1eJGZ8p1CenqKASXGYa3I2eXYxzXZczOurrHRMLycwxHhzhWXr
+# 9fdEBf9oJv/0Y3ie+DRUwSp8UHOb+xwJW3BpF1mgdLpOT8hl666tEqMBGiW7Q1aT
+# 1JoIYooNGdRPsJSh3RQ7A6aJDOdT6k8NC2PdwG4NYMBSTuc6DQc+lrOn1mG93RQc
+# V9oBcs4AKbtYahGKRhSRKVFJpPW+pavpB1iHsHnTtCAFmx03LvQNtRcrrYpd/RES
+# YjeLgNWh8EhJzQc=
 # SIG # End signature block

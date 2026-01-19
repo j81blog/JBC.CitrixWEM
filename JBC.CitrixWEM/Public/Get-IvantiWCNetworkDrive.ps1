@@ -1,12 +1,12 @@
-﻿function Get-IvantiWCApplication {
+﻿function Get-IvantiWCNetworkDrive {
     <#
     .SYNOPSIS
-        Retrieves Ivanti Workspace Control application configurations from XML files.
+        Retrieves Ivanti Workspace Control network drive mappings from XML files.
 
     .DESCRIPTION
-        Processes Ivanti Workspace Control XML building block file(s) and extracts application
-        settings, assignments, and metadata. Supports both single large XML files and
-        directories containing multiple separate XML files (one per application).
+        Processes Ivanti Workspace Control XML building block file(s) and extracts network drive
+        mapping settings, assignments, and metadata. Supports both single large XML files and
+        directories containing multiple separate XML files.
 
     .PARAMETER XmlFilePath
         (Legacy parameter) Path to a single Ivanti Workspace Control XML building block file.
@@ -14,40 +14,41 @@
 
     .PARAMETER XmlPath
         Path to either:
-        - A single XML file containing all application configurations
-        - A directory containing multiple XML files (one per application)
+        - A single XML file containing all network drive configurations
+        - A directory containing multiple XML files
+
+    .PARAMETER DomainFqdn
+        Domain FQDN to append to non-FQDN SMB paths.
 
     .PARAMETER AsJson
         Switch to output the results as JSON format instead of PowerShell objects.
 
+    .PARAMETER ExportFor
+        Target system for export: AppVentiX or WEM.
+
     .EXAMPLE
-        Get-IvantiWCApplication -XmlFilePath "C:\Config\IvantiApps.xml"
+        Get-IvantiWCNetworkDrive -XmlFilePath "C:\Config\IvantiDrives.xml" -DomainFqdn "corp.contoso.com"
 
         Processes a single XML file (legacy parameter usage).
 
     .EXAMPLE
-        Get-IvantiWCApplication -XmlPath "C:\Config\IvantiApps.xml"
+        Get-IvantiWCNetworkDrive -XmlPath "C:\Config\NetworkDrives\" -DomainFqdn "corp.contoso.com"
 
-        Processes a single XML file containing all applications.
-
-    .EXAMPLE
-        Get-IvantiWCApplication -XmlPath "C:\Config\Applications\" -AsJson
-
-        Processes all XML files in the specified directory and outputs as JSON.
+        Processes all XML files in the specified directory.
 
     .NOTES
-        Function  : Get-IvantiWCApplication
+        Function  : Get-IvantiWCNetworkDrive
         Author    : John Billekens
         CoAuthor  : Claude (Anthropic)
         Copyright : Copyright (c) John Billekens Consultancy
-        Version   : 2025.1111.2145
+        Version   : 2026.118.1
     #>
     [CmdletBinding()]
     param (
         [Parameter(
             Mandatory = $true,
             ParameterSetName = 'ByFilePath',
-            HelpMessage = "Path to the Ivanti Workspace Control XML building block file."
+            HelpMessage = "Path to the Ivanti Workspace Control XML configuration file."
         )]
         [ValidateScript({
                 if (-not (Test-Path $_ -PathType Leaf)) {
@@ -72,6 +73,12 @@
 
         [Parameter(
             Mandatory = $false,
+            HelpMessage = "Domain FQDN to append to non-FQDN SMB paths."
+        )]
+        [string]$DomainFqdn,
+
+        [Parameter(
+            Mandatory = $false,
             HelpMessage = "Output the results as JSON."
         )]
         [switch]$AsJson,
@@ -81,7 +88,7 @@
     )
 
     $JsonOutput = @()
-    $ApplicationsToProcess = @()
+    $NetworkDrivesToProcess = @()
 
     if ($PSCmdlet.ParameterSetName -eq 'ByFilePath') {
         $XmlPath = $XmlFilePath
@@ -90,16 +97,14 @@
     # Determine if XmlPath is a file or directory
     if (Test-Path -Path $XmlPath -PathType Leaf) {
         # Single XML file mode
-
         try {
             Write-Verbose "Reading and parsing the Ivanti XML file at '$($XmlPath)'."
             [xml]$IvantiXmlData = ConvertFrom-IvantiBB -XmlFilePath $XmlPath
         } catch {
             Write-Error "Failed to read or parse the XML file '$($XmlPath)'. Error: $($_.Exception.Message)"
-            return # Stop execution if file can't be read
+            return
         }
-        Write-Verbose "Retrieving application nodes from the XML data."
-        $ApplicationsToProcess = @($IvantiXmlData.SelectNodes("//application"))
+        $NetworkDrivesToProcess = @($IvantiXmlData.SelectNodes("//mapping"))
 
     } elseif (Test-Path -Path $XmlPath -PathType Container) {
         # Directory with multiple XML files mode
@@ -116,13 +121,13 @@
         foreach ($XmlFile in $XmlFiles) {
             try {
                 [xml]$XmlData = ConvertFrom-IvantiBB -XmlFilePath $XmlFile.FullName
-                $Apps = @($XmlData.SelectNodes("//application"))
+                $Drives = @($XmlData.SelectNodes("//mapping"))
 
-                if ($Apps.Count -gt 0) {
-                    $ApplicationsToProcess += $Apps
-                    Write-Verbose "Loaded $($Apps.Count) application(s) from '$($XmlFile.Name)'"
+                if ($Drives.Count -gt 0) {
+                    $NetworkDrivesToProcess += $Drives
+                    Write-Verbose "Loaded $($Drives.Count) network drive mapping(s) from '$($XmlFile.Name)'"
                 } else {
-                    Write-Warning "No application nodes found in file: $($XmlFile.Name)"
+                    Write-Warning "No network drive mapping nodes found in file: $($XmlFile.Name)"
                 }
             } catch {
                 Write-Warning "Failed to load XML file '$($XmlFile.Name)': $_"
@@ -138,136 +143,116 @@
         $DomainNetBIOS = Get-ADDomainNetBIOS -FQDN $DomainFqdn
     }
 
-    if ($ApplicationsToProcess.Count -eq 0) {
-        Write-Warning "No applications found to process."
+    if ($NetworkDrivesToProcess.Count -eq 0) {
+        Write-Warning "No network drive mappings found to process."
         return
     }
 
-    $TotalNumberOfItems = $ApplicationsToProcess.Count
+    $TotalNumberOfItems = $NetworkDrivesToProcess.Count
     $Counter = 0
-    Write-Verbose "Found $TotalNumberOfItems applications to process in the Ivanti Workspace Control XML."
-    for ($i = 0; $i -lt $ApplicationsToProcess.Count; $i++) {
+    Write-Verbose "Found $TotalNumberOfItems network drive mappings to process."
+    for ($i = 0; $i -lt $NetworkDrivesToProcess.Count; $i++) {
         $Counter++
-        $Application = $ApplicationsToProcess[$i]
-        Write-Progress -Activity "Processing Applications" -Status "Processing item $($Counter) of $($TotalNumberOfItems)" -CurrentOperation "Application: `"$($Application.configuration.title)`"" -PercentComplete (($Counter / $TotalNumberOfItems) * 100)
-        $Enabled = $false
-        $State = "Disabled"
-        if ($Application.settings.enabled -eq "yes") {
-            $Enabled = $true
-            $State = "Enabled"
+        Write-Progress -Activity "Processing Drive Mappings" -Status "Processing item $($Counter) of $($TotalNumberOfItems)" -CurrentOperation "Drive: $($NetworkDrive.path)" -PercentComplete (($Counter / $TotalNumberOfItems) * 100)
+        $NetworkDrive = $NetworkDrivesToProcess[$i]
+
+        if ([string]::IsNullOrEmpty($($NetworkDrive.sharename))) {
+            Write-Warning "The Drive mapping 'Name: $($NetworkDrive.friendlyname) / Device: $($NetworkDrive.device)' does not have a valid share name defined. Skipping this mapping."
+            continue
         }
-        if ($Application.settings.enabled -eq "no" -or [string]::IsNullOrEmpty($Application.settings.enabled)) {
+
+        if ($NetworkDrive.enabled -ine "yes" -or [string]::IsNullOrEmpty($NetworkDrive.sharename)) {
             $Enabled = $false
-            $State = "Disabled"
-        }
-        $URL = ""
-        $Parameters = "$($Application.configuration.parameters)"
-        $CommandLine = "$($Application.configuration.commandline)"
-        $WorkingDir = "$($Application.configuration.workingdir)"
-        $DisplayName = "$($Application.configuration.title)"
-        $Description = "$($Application.configuration.description)"
-
-        $BinaryIconData = $null
-        if (-not [string]::IsNullOrEmpty($($Application.configuration.icon32x256))) {
-            $BinaryIconData = $($Application.configuration.icon32x256)
-        } elseif (-not [string]::IsNullOrEmpty($($Application.configuration.icon32x16))) {
-            $BinaryIconData = $($Application.configuration.icon32x16)
-        } elseif (-not [string]::IsNullOrEmpty($($Application.configuration.icon16x16))) {
-            $BinaryIconData = $($Application.configuration.icon16x16)
-        }
-        if (-not [string]::IsNullOrEmpty($BinaryIconData)) {
-            $IconStream = Convert-BinaryIconToBase64 -IconData $BinaryIconData -Size 32
         } else {
-            $IconStream = "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"
+            $Enabled = $true
         }
 
-        $StartMenuPath = "$($Application.configuration.menu)"
-        if ($StartMenuPath -eq "") {
-            $StartMenuPath = "Start Menu\Programs"
-        } elseif ($StartMenuPath -like "Start\*") {
-            $StartMenuPath = "Start Menu\Programs$($StartMenuPath.Substring(5))"
+        try {
+            if (-not [string]::IsNullOrEmpty($DomainFqdn)) {
+                $TargetPath = ConvertTo-SmbFqdnPath -Path $NetworkDrive.sharename -Domain $DomainFqdn
+            } else {
+                Write-Warning "The Drive mapping is not a FQDN, but a single name. Best practice is to use a FQDN"
+                $TargetPath = $NetworkDrive.sharename
+            }
+        } catch {
+            Write-Warning "Failed to convert path for drive mapping '$($NetworkDrive.sharename)'."\
+            $TargetPath = $NetworkDrive.sharename
         }
 
-        $Assignments = @(ConvertFrom-IvantiAccessControl -AccessControl $Application.accesscontrol -IWCComponentName $Application.configuration.title -IWCComponent "Application")
-        $IsDesktop = $false
-        if ($Application.configuration.desktop -ine "none" -and -not [string]::IsNullOrEmpty($($Application.configuration.desktop))) {
-            $IsDesktop = $true
-        }
-        $isQuickLaunch = $false
-        if ($Application.configuration.quicklaunch -ine "none" -and -not [string]::IsNullOrEmpty($($Application.configuration.quicklaunch))) {
-            $isQuickLaunch = $true
+        $Assignments = @(ConvertFrom-IvantiAccessControl -AccessControl $NetworkDrive.accesscontrol -IWCComponentName $NetworkDrive.friendlyname -IWCComponent "NetworkDrive")
+
+        $name = $NetworkDrive.friendlyname
+        if ([string]::IsNullOrEmpty($name)) {
+            $name = $TargetPath
         }
 
-        $isStartMenu = $false
-        if ($Application.configuration.createmenushortcut -ieq "yes") {
-            $isStartMenu = $true
-        }
-        if ([string]::IsNullOrEmpty($workingDir)) {
-            $workingDir = Split-Path -Path $CommandLine -Parent
-        }
-
-        $isAutoStart = $false
-        if ($Application.settings.autoall -ine "no" -and -not [string]::IsNullOrEmpty($($Application.settings.autoall))) {
-            $isAutoStart = $true
-        }
-        $WindowStyle = $Application.settings.startstyle
-        if ([string]::IsNullOrEmpty($WindowStyle) -or $WindowStyle -like "nor*") {
-            $WindowStyle = "Normal"
-        } elseif ($WindowStyle -like "max*") {
-            $WindowStyle = "Maximized"
-        } elseif ($WindowStyle -like "min*") {
-            $WindowStyle = "Minimized"
-        } else {
-            $WindowStyle = "Normal"
-        }
-
+        # Create the output object
         $Output = [PSCustomObject]@{
-            Name    = $DisplayName
-            Enabled = $Enabled
+            Action         = $NetworkDrive.action
+            DriveLetter    = "$($NetworkDrive.device)".TrimEnd(":")
+            NetworkPath    = $TargetPath
+            Label          = $NetworkDrive.friendlyname
+            Description    = $NetworkDrive.description
+            Persistent     = $false
+            UseDriveLetter = $true
+            HideDrive      = $NetworkDrive.hidedrive
+            Enabled        = $Enabled
+
+
         }
         switch ($ExportFor) {
             "WEM" {
                 $WEMAssignments = @($Assignments | Select-Object Sid, Name, Type)
                 $Output | Add-Member -MemberType NoteProperty -Name "WEMAssignments" -Value $WEMAssignments
-                $WEMAssignmentParams = [PSCustomObject]@{
-                    isAutoStart   = $IsAutoStart
-                    isDesktop     = $IsDesktop
-                    isQuickLaunch = $IsQuickLaunch
-                    isStartMenu   = $IsStartMenu
+                $WEMAssignmentParams = @{
+                    DriveLetter = "$($NetworkDrive.device)".TrimEnd(":")
                 }
                 $Output | Add-Member -MemberType NoteProperty -Name "WEMAssignmentParams" -Value $WEMAssignmentParams
-                $WEMApplicationParams = [PSCustomObject]@{
-                    startMenuPath = $StartMenuPath
-                    appType       = "InstallerApplication"
-                    state         = $State
-                    iconStream    = $IconStream
-                    parameter     = $Parameters
-                    description   = $Description
-                    name          = $DisplayName
-                    commandLine   = $CommandLine
-                    workingDir    = $WorkingDir
-                    url           = $URL
-                    displayName   = $DisplayName
-                    windowStyle   = $WindowStyle
-                    actionType    = "CreateAppShortcut"
+                $WEMNetworkDriveParams = [PSCustomObject]@{
+                    Name           = "$($name)"
+                    TargetPath     = "$($TargetPath)"
+                    DisplayName    = "$($NetworkDrive.friendlyname)"
+                    Description    = "$($NetworkDrive.description)"
+                    Enabled        = $Enabled
+                    SetAsHomeDrive = $false
                 }
-                $Output | Add-Member -MemberType NoteProperty -Name "WEMApplicationParams" -Value $WEMApplicationParams
+                $Output | Add-Member -MemberType NoteProperty -Name "WEMNetworkDriveParams" -Value $WEMNetworkDriveParams
+
             }
             "AppVentiX" {
+                if ($NetworkDrive.hidedrive -ieq "Default" -or $NetworkDrive.hidedrive -ieq "never") {
+                    $HideDrive = $false
+                } else {
+                    $HideDrive = $true
+                }
                 $AppVentiXAssignments = @($Assignments | Select-Object Sid, Name, Type, DomainFQDN)
                 $Output | Add-Member -MemberType NoteProperty -Name "AppVentiXAssignments" -Value $AppVentiXAssignments
+                $FriendlyName = $NetworkDrive.friendlyname
+                if ([string]::IsNullOrEmpty($FriendlyName)) {
+                    $FriendlyName = $NetworkDrive.sharename
+                }
+                $AppVentiXParams = [PSCustomObject]@{
+                    FriendlyName   = "$($FriendlyName)"
+                    Description    = "$($NetworkDrive.description)"
+                    DriveLetter    = "$("$($NetworkDrive.device)".TrimEnd(":")):"
+                    NetworkPath    = "$($TargetPath)"
+                    ConnectAtLogon = $true
+                    Label          = "$($NetworkDrive.friendlyname)"
+                    DoNotExecute   = $false
+                    HideDrive      = $HideDrive
+                }
+                $Output | Add-Member -MemberType NoteProperty -Name "AppVentiXParams" -Value $AppVentiXParams
             }
         }
-
         if ($AsJson) {
             $JsonOutput += $Output
         } else {
             Write-Output $Output
         }
     }
-    Write-Progress -Activity "Processing Applications" -Completed
-    Write-Verbose "Processing completed. Processed $TotalNumberOfItems applications."
-    if ($AsJson) {
+    Write-Progress -Activity "Processing Drive Mappings" -Completed
+    Write-Verbose "Processing completed. Processed $TotalNumberOfItems network drive mappings."
+    if ($AsJson -and $JsonOutput.Count -gt 0) {
         Write-Verbose "Converting output to JSON format."
         return ($JsonOutput | ConvertTo-Json -Depth 5)
     }
@@ -276,8 +261,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAWZhal1WPW8An8
-# uObPkUzKBwaV4awxtQ02p9pPG2xYsKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCGRHo4SXT2zGio
+# j+SZ0N2KFI0l6UoyrNI//3QiRmddVKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -453,31 +438,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCAIB0wYbFUKn5QpfWcWeHDgp3Y8fc4OFjD6TDIyT7IG
-# 9zANBgkqhkiG9w0BAQEFAASCAYBtZEhFX8norL0ZEZD8TVmuLluuFAJSseJMgWwL
-# i6c/leUfPjABnp9anINFQNDnkHLEOoDRNcev47g0qyINLREGI6nBSvPhcA+Kz4CN
-# o94UmDEtleBSei4X3ioakApeHLddAXKXX8KCp8N61abT9yNAQcJbN19kkw5ZG+hl
-# upgBNLPVR/AMK8bjeXB2kFajV9cw/0bfFS61lJf1M5kJtSaFbF5TWEz3+ceJ3iZU
-# SKYqnjy/0mxNSg2EU0z8AxNisEd8tH9a/Y5eiN5Cljqv7Kc0yh+0DKdMsiBzqKeq
-# yacTg/MKBjtSRpRPReltyJI/IQkC2xMNgbTwFhN+K6R5KHWoJzsWEiYiKioVEhB7
-# Iy/BPhjUSsRIhdXPqTwXxIWMN3q08YYuQZBL1vB2txbAlIz8e9onl9BuGTs1HjLm
-# edLX6fHOFTopSoHoCHoZKZLhmOAINK4+D/6wcoswTXeC7LP4ujt3v9pXYJ3rSc5e
-# OP2c8ObBLYsbOeUxRzP825ro42KhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDTozSU9t+cMBvIq3uxx20rdY8o+xpJy+pIgTRluCga
+# gjANBgkqhkiG9w0BAQEFAASCAYA+gOyevH4U9w5OeTryVHfm2fwOWDw2ibhDt0vk
+# OeD8eKonZTEVqoiIbcgNamexHRsH6wKCMMz38VF4Cqr+k7MJdCBh3Me1c27oygZs
+# MUWbRw+6Cpj9RKFeifTFXC3zou0pZ4gqrYFfKKEbQuriScyN5mpzX9sWb4oy4muv
+# 1avIDNxj4LXWXd/lOt+xNkmaizlzHFv9JYnLkj3+RbJnDGhcG7aNRGS/Ge6o0OFz
+# Ozx7Z4K2jxdHcHDRJJ49yccVaztDHvRTXdsgoAYWLbXcSd2KiTB+FYCH3OypwKUL
+# yWZxN6TOh1CU0ZSq2YG8zmIKml6VltuKnn3Q+OCbBcnnG9ze7ixLcJiPW9A5xzTA
+# dLwNCq36J56AI/BpEDQeZNjCN8eXF/vt7N5Q7vGxWymhUQFTHOBsPmXkVXXhxlWr
+# N8h7Wq4gaSDl/BqcAvTxzBTtNERqHYbM8INTXV9SHkToFYuuRNZ3sh9EHSKIxpb4
+# 169ujCa14FV2CGi64UtSLuMqRKihggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxODU1MzVaMD8GCSqGSIb3
-# DQEJBDEyBDB8VuijwypD2KTYPnBvATrRz24vVzDe5Q0L/x5Q9pAw8/g2mVmiC1aa
-# s7Asz0ooNTwwDQYJKoZIhvcNAQEBBQAEggIABQP7I1XLKAnY4x5wICaHNyK/JIx3
-# r5dXUTcTe+FIaWCRuUPrjKVEfoynSycFbiH485Z8e059tYN4rDYJjfF9E7sOKqqf
-# c3Lx38TaBeaMnDSOFB6HROsjM17Wf3avWH+AlUgNrrPGPuxtJdzxEpIRQmU94mlk
-# vzru9vpvVC+T2QX/JY8Os9bXnJp5hQGCs5ktMqKaQt3HPtkp5fKCi3yjwP/KL/da
-# hN4PA3JEOB8jUquSIKX1pE+tPUYCiNT9cF9mLJ0EEAJ2HLnnmiHolA0lmsNypol6
-# fybsOIgfCeBK8FOb7iZ3/B9sLsa8UJndEDTED88KAhjtKdU//9j0sm+tM493Wmvh
-# wsEJZH8qcGiGDVCo/mWep6IPFIkaI+JKUWgkN2cRQyOL/SieQHGL4Sn6opsLwJB/
-# OCqGPmcun5/MgmCMPkv7i22BJpBaHyzyz+/VjBi2uep1xlb+hsj97QEwZy1uIVfM
-# OVtHBDplJORcQRGPVZ9mJut8w9EDOgdVmmGTTM3/Uc2Hu91aAOlL499+YJHhJVt5
-# /7uVZNSBs9m11m5b1NOe2/rn0Uo30pPQ7/hiEKvcFd3fX1Cp/0+TfvM9l2SmUOyy
-# 44xhGbkB6+r2gq21jIiCrZBT5zscqAxTD9gNWFWF6mmwaUx3en1IsKGGKeWFQsGR
-# 1tPS2z1lZGUcPeE=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxOTIyMTZaMD8GCSqGSIb3
+# DQEJBDEyBDDXBBBTstC3D/tmZ8rjO4Msg6HPobJiu0008l5WmPU397cQDCHGI7e2
+# JqT7T0S3u0swDQYJKoZIhvcNAQEBBQAEggIArITBGUFwUQyAkamCS+6VqNUSdaD7
+# 1+b3oZ7ks8dAPYeSHf4A1YcB6rwC1/oPDkSnEdZFEylsax0GhSbncDQvNjb2+36Y
+# /Qa6TVz096Bg0JfaaO9QTr5YYHkL0fccFMN93C0BjfwRkH9bIaPiYMnMgNroguGF
+# 8VntlOnl5hFTrGtKFF6nKOuDr983VcSe4vTl5ZMGQMcCL0/VOGIC0HKYF0d6+3JG
+# K/YRAcMaBRyN5spdAaw7vJJb8uEBht/fwXS26Xskq0W2/z7CguzhyJaHHSgv3X24
+# lbDsPXSKsBsxB3vQ20W2Tijmyky53tRaIIuRHnkvHk8Gd96mrsNlkwjNxKT7LLgy
+# jzyzpxAv/N4ppMbppqK4giBT2VjkTJooXUexeGZHcAR8XKF2ySsMxXSwd7eALI3a
+# KBgogdu17mrb08FcmYT/h0T25kPtO9b4QolnGQ5Ra+1VsdvVb37WQbx/k+vK1r9z
+# dJG7Lj8EzSDNq7GNah5kRLTU/hnqYnQkUcU6ghqcuTBAkOacbpFGReb3YskkTYgb
+# VIlpO+Mf/UqVRdWDYUjoOpRclfNFgDldTqXzsplaOjIts9Ypj75sBUxSuUjvAFCA
+# uQNUBgq1FkRbdajc1+UBeE14sgxX3vzuMVWYyEwQVX6vghW+SEmiVCN2HHZbEiGg
+# BI5VLYatsOX27BE=
 # SIG # End signature block

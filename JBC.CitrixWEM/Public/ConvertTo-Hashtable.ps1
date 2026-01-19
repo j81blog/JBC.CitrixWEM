@@ -1,4 +1,4 @@
-function ConvertTo-Hashtable {
+﻿function ConvertTo-Hashtable {
     <#
         .SYNOPSIS
             Recursively converts a PSObject or an array of PSObjects into a hashtable or an array of hashtables.
@@ -44,19 +44,49 @@ function ConvertTo-Hashtable {
     [OutputType('hashtable')]
     param (
         [Parameter(ValueFromPipeline = $true)]
-        [object]$InputObject
+        [object]$InputObject,
+
+        # Internal parameter for tracking visited objects to prevent circular references
+        [Parameter(DontShow)]
+        [System.Collections.Generic.HashSet[int]]$Visited
     )
+
+    begin {
+        if ($null -eq $Visited) {
+            $Visited = [System.Collections.Generic.HashSet[int]]::new()
+        }
+    }
 
     process {
         if ($null -eq $InputObject) {
             return $null
         }
 
+        # Check for circular references using object's runtime identity hash code
+        # Only check reference types (not value types or strings)
+        if (-not $InputObject.GetType().IsValueType -and $InputObject -isnot [string]) {
+            $objectId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($InputObject)
+            if (-not $Visited.Add($objectId)) {
+                # Already visited this object - return as-is to prevent infinite recursion
+                Write-Verbose "Circular reference detected, returning object as-is"
+                return $InputObject
+            }
+        }
+
+        # Handle dictionaries (hashtables) - return as-is or convert to regular hashtable
+        if ($InputObject -is [System.Collections.IDictionary]) {
+            $Hash = @{}
+            foreach ($key in $InputObject.Keys) {
+                $Hash[$key] = ConvertTo-Hashtable -InputObject $InputObject[$key] -Visited $Visited
+            }
+            return $Hash
+        }
+
         if ($InputObject -is [System.Collections.IEnumerable] -and $InputObject -isnot [string]) {
             # If the object is a collection (but not a string), process each item recursively.
             $Collection = @(
                 foreach ($Object in $InputObject) {
-                    ConvertTo-Hashtable -InputObject $Object
+                    ConvertTo-Hashtable -InputObject $Object -Visited $Visited
                 }
             )
             # Use Write-Output with -NoEnumerate to return the collection as a single array.
@@ -66,7 +96,7 @@ function ConvertTo-Hashtable {
             $Hash = @{}
             foreach ($Property in $InputObject.PSObject.Properties) {
                 # Recursively convert the property's value.
-                $Hash[$Property.Name] = ConvertTo-Hashtable -InputObject $Property.Value
+                $Hash[$Property.Name] = ConvertTo-Hashtable -InputObject $Property.Value -Visited $Visited
             }
             # Return the populated hashtable.
             $Hash
@@ -80,8 +110,8 @@ function ConvertTo-Hashtable {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCaiVzL9O49qKP+
-# 1djggsTduIypFH7MGKIZWDpVWJ5RQ6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCD/+MYXh8l/85H9
+# hYuKCLQ04BdDby3b8Q24os2gA6VTIqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -257,31 +287,31 @@ function ConvertTo-Hashtable {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCAg7Wc9i+q9t7jMjo5MfziIiPPX4Y2D9A3Pg6GrsMyi
-# VTANBgkqhkiG9w0BAQEFAASCAYAdwkerNAA/2XC+rVTbtW7V9+PRGfErJ12g5YnC
-# gXINQxqzb5Ra1rCB7Wk3pKmcyaSsn3I9e+0iwMfB4mzMsV0sZqiw9ypwebuabtca
-# P8vYe1bD0unjWT6xdIcGx3Gbq2NFdOl149M764NUtT0MS1DY+WKygX28jcfoP1pN
-# hiNdYKP6LwINsbcDbBDE/UVGvUqnnPLsnJ0wKJ/xNUlrzYk1CXOFPUHiPyezMKKL
-# Bb96cQBb8hr6IgYJdGQe6eY4ozYAoRZMcMAwdJzAx28+M9gMqCA/kJ8oNe+cvWYd
-# oVj/5EMYO94mq0OIPG/hl1a2d9EUOY0s7jMLJCBSKOep5wz8qi9WrMc8h19Vl9dM
-# xIwS0atQPkiDKmWb5TGqlJReNdBTqL2+pkk6NP6v1J9HAFCTjrF6j/HiafFUY5Od
-# gMCJd41Qci9YVYYiDLRviy/pA+snlgBanBzpbENkCNMOA+W5v0SEH+2DKslxo6KT
-# KG9jKy3weAaJdI/qV1BV0Hr9ZeGhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBzvoza9O05GYIjQD3lCLomHSopQdoR/6vz2Ly5ueGB
+# 7jANBgkqhkiG9w0BAQEFAASCAYDKabYo5d3tUUjLGlmpyQTPqv9km+KTgoLRYoaC
+# GKGZSGl9C+qo0s87L8J9B+6yX6gzEwBBjZvy7qdgRTWO9/COxIvZOlS8ggovXuGa
+# 1LiOiQtQ/l0ohEpCDUaZ5WSxGNL/OcmkK6eGKs5hse51Pc3bWU7+s8w0OfwP1WZS
+# saZMXo8a1IAxnk+h2fZH+Ic/rOYIfuDmRfIcKeAFv4KS4uK4Ib6tmIfBSwp/msy/
+# RuddcUwkRRk3qnvsdqkjtrVA7qlqMbtb+/9kYupCHquLzokVVkPMRq7gZo3/eCTU
+# UcKra7ZmG33eUkP9M4Q+KS5b8YGffb07Ood5sdnLJZj6pR0Vq84x5a35sCZHWUXI
+# a9Smql1viD7Rx8UqrFpR6e8d5s3CIuZbnCh6qJKoeplWTell1cQFuwyOSY+a0W+o
+# 7jyBNSh7gxqw2MOV1wlztTnbBRhcUtavu0K4BYSRETn9FOnNrTfMXxozy9xX5DYT
+# klL/SJa4LO8EOf5qflmZcHsvvPWhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU2MjVaMD8GCSqGSIb3
-# DQEJBDEyBDBJydqGsCsrWNAhWGEnN0k1SY9qVqBHjsge6UrRH3kLvgHotSOxsZLf
-# RscnU9z9J/YwDQYJKoZIhvcNAQEBBQAEggIAM77z/cbEK5jwOp/TQDiNw1mSA0GI
-# LWyrhPubdQwWAOiimFwpwfdSyRYDAxaxpjVUDmsFMLGm1TfESDHGtze7Brg9tMyg
-# 5N6ortMqxwoKsaPfNmINVmB9ijArD36jLbDT4wTuzMN08SjKC43TcKGqlarS1CJk
-# 1jP11pCg5KmG1fVqJkV2klTppMbMsBLI7QiIylddeEwN/P4esLu+IfC3XwcPK0g/
-# NeXdauBcrIyAR9dJ8lYuvjEOX2PrAeaEejAC5UUTmXBTP8DQwGZfH2t6C5WLJFG8
-# wQqUK3pnkmqT2b+4ZI9Fxyipx4lHSmLMQC7mp6rzO1ODPVqX4B2pb0J7p0xgzJNf
-# tyzdprbKRMIl/vlbub1BitmPBnorhjFtvtRUkE4A8mIuioo3VGDbMdZPGLlVPAUn
-# OcMs38xWyFAv8REG37yaqZ2YA+3/zsDsYaySZbjn0+6GM0UeMNDDRr4iDWv9KRdh
-# 4WykgNyZ3HiV1m2Wn60ut5CoBTnsSO1gVYkvg/Uba5MZ71gy4niBNhhNlBtTSxc0
-# sHmm9u3822vF8GOiUzOCp+tW1T/jRBbJ8d8Bm1aOUgdPHMo2SfY6uhRQO+TKVNlS
-# 3NifZcyEoSOhxr222yrRTjDrejkWDoPwG8ZnLUNp6IlKGDbAjTxB8VvRV8HAIjbo
-# ik4TnOSo6tAcg1I=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgyMDE5MjRaMD8GCSqGSIb3
+# DQEJBDEyBDBnv7p0DeehJknbdzBIPuPt+mYPomyImqPPiSkhNJZGm9A0fcXrfwjF
+# 6ydsKbgpGxIwDQYJKoZIhvcNAQEBBQAEggIAr1tVh19WAH8cb5FyGZe/ORKTkzn8
+# fi8RthRD2i0sy3hx6IfqlXCrWIP0xX15GJrf3STdZhJ6fX9DiicEkssrELKQ1lCb
+# i6iUweS4ZArZFbsEN8jxeRoUoxhcJvKKkySAnrI2eEGc2sjKR6OKps33EGApNIp9
+# qZo8e+XEugDgIqo/UYzy0n5V3b8gFlVRY63B1nbH/QGKm6DBxmRYtyHgqV8HK3rr
+# gOTC+qLUknPHkWdI7JrmYsKpP8IyQfKwqm4wm8MKEe3Yp6zkLLcamaFhChcQOg7c
+# MbE1WnnL4yFoQg0Mcz3R3wlIto/IdWx6U0qc8az+jGbnU+GjB8eYNr0vuITlEtoz
+# zi53gVGDplc4h6gAnsp7kFLtCj1Cw+5ZulsFX89NHHJcd881486pRCr3A3vfWoKW
+# FRcZ36XK/vkclPriB3cw//A4i3DU0X8RCgiTfknKPMfqhXTnRDxyGkg3x9aRBqZK
+# TIRcy7z+SpFCmB+eg0cTC1DVv4GohuHKYVkHJDFtqRJ8fkZ4I+fLuKUO/EjYueMd
+# 7mNS3yE8MbeMC55P3/kT2yr5H/tvb50R3xxCqvGUIrECWMHce+CSaEjjehwbsvJd
+# 7Jseh+X8Vlj1MZZgvIaiiF+uloTjbHe971gaayQu9JiSMGYPiECworSvbcVWR3kU
+# zfHtqX/pRyhNG9k=
 # SIG # End signature block

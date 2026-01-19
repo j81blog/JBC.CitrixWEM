@@ -1,102 +1,131 @@
-[CmdletBinding()]
-param(
-    [Parameter(Mandatory = $false)]
-    [string]$remoteBranch = 'main',
+﻿function Get-ADDomainNetBIOS {
+    <#
+    .SYNOPSIS
+        Resolves FQDN to NetBIOS domain name with caching.
 
-    [Parameter(Mandatory = $false)]
-    $uri = 'https://github.com/j81blog/JBC.CitrixWEM/archive',
+    .DESCRIPTION
+        Converts an Active Directory FQDN to its NetBIOS domain name
+        using .NET DirectoryServices classes with script-level caching for performance.
+        Shares cache with Get-ADDomainFQDN for bidirectional lookups.
+        Does not require RSAT or AD module.
 
-    [Parameter(Mandatory = $false)]
-    [String]$ModuleName = 'JBC.CitrixWEM'
-)
+    .PARAMETER FQDN
+        The fully qualified domain name (e.g., contoso.com).
 
-#Requires -Version 5.1
+    .PARAMETER NoCache
+        Bypass cache and force fresh lookup.
 
-if ($PSVersionTable.PSEdition -eq 'Desktop') {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'WindowsPowerShell\Modules')
-} elseif ($IsWindows) {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'PowerShell\Modules')
-} else {
-    $InstallPath = [System.IO.Path]::Combine($env:HOME, '.local/share/powershell/Modules')
-}
+    .EXAMPLE
+        Get-ADDomainNetBIOS -FQDN "contoso.com"
+        Returns: CONTOSO (and caches result)
 
-$ExecutionPolicy = Get-ExecutionPolicy
-if (('PSEdition' -notin $PSVersionTable.Keys -or $PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) -and ($ExecutionPolicy -notin 'Unrestricted', 'RemoteSigned', 'Bypass')) {
-    Write-Host "Setting process execution policy to RemoteSigned" -ForegroundColor Cyan
-    Set-ExecutionPolicy RemoteSigned -Scope Process -Force
-} else {
-    Write-Host "Current execution policy: $ExecutionPolicy" -ForegroundColor Yellow
-}
+    .EXAMPLE
+        Get-ADDomainNetBIOS -FQDN "contoso.com" -NoCache
+        Forces fresh lookup, updates cache.
 
-if (-not (Test-Path -Path $InstallPath)) {
-    Write-Host "Creating module path: $InstallPath" -ForegroundColor Cyan
-    New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
-}
+    .NOTES
+        Function  : Get-ADDomainNetBIOS
+        Author    : John Billekens
+        Copyright : Copyright (c) John Billekens Consultancy
+        Version   : 2025.0102.1500
+    #>
 
-if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$FQDN,
 
-    # GitHub now requires TLS 1.2
-    # https://blog.github.com/2018-02-23-weak-cryptographic-standards-removed/
-    $CurrentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__, [Net.SecurityProtocolType]::Tls.value__)
-    $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $CurrentMaxTls }
-    $newTlsTypes | ForEach-Object {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
-    }
+        [Parameter(Mandatory = $false)]
+        [switch]$NoCache
+    )
 
-
-    $Url = "{0}/{1}.zip" -f $Uri.TrimEnd('/'), $RemoteBranch
-    Write-Host "Downloading latest version of $ModuleName from $Url" -ForegroundColor Cyan
-    $File = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), "$ModuleName.zip")
-    $webclient = New-Object System.Net.WebClient
-    try {
-        $webclient.DownloadFile($Url, $File)
-    } catch {
-        Write-Host "Failed to download the file from $Url, Error $($_.Exception.Message)" -ForegroundColor Red
-        throw $_
-    }
-    Write-Host "File saved to $File" -ForegroundColor Green
-
-    $TempPath = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), [guid]::NewGuid().ToString())
-    Write-Host "Expanding $ModuleName.zip to $($TempPath)" -ForegroundColor Cyan
-    if (Test-Path -Path $TempPath) {
-        Remove-Item -Path $TempPath -Recurse -Force -ErrorAction Continue
-    }
-    New-Item -ItemType Directory -Force -Path $TempPath | Out-Null
-    Expand-Archive -Path $File -DestinationPath $TempPath -Force
-
-    #Extract module version from module manifest
-    $ModuleManifest = Get-ChildItem -Path $TempPath -Filter "$ModuleName*.psd1" -Recurse | Select-Object -First 1
-    if ($null -eq $ModuleManifest) {
-        Write-Host "Module manifest not found in $($TempPath)" -ForegroundColor Red
-        throw "Module manifest not found"
+    Write-Verbose "Resolving FQDN '$($FQDN)' to NetBIOS name"
+    # Initialize script-level cache structure
+    if ($(try {$Script:CitrixWEM.GetType()} catch {$null})) {
+        Write-Verbose "CitrixWEM script variable exists"
     } else {
-        $ModuleInfo = Import-PowerShellDataFile -Path $ModuleManifest.FullName
-        $ModuleVersion = $ModuleInfo.ModuleVersion
-        Write-Host "Module version: $($ModuleVersion)" -ForegroundColor Green
+        Write-Verbose "CitrixWEM script variable does not exist"
+        $Script:CitrixWEM = @{}
+        Write-Verbose "Initialized CitrixWEM script variable"
     }
 
-    if (Test-Path -Path "$($InstallPath)\$($ModuleName)") {
-        Write-Host "Removing any old copy" -ForegroundColor Cyan
-        Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Continue
+    if (-not $Script:CitrixWEM.ADCache) {
+        $Script:CitrixWEM.ADCache = @{}
+        Write-Verbose "Initialized ADCache"
     }
-    Write-Host "Moving new module to $InstallPath" -ForegroundColor Cyan
-    Move-Item -Path "$($TempPath)\$($ModuleName)-$($RemoteBranch)\$($ModuleName)" -Destination $InstallPath -Force -ErrorAction Continue
-    Remove-Item -Path "$($TempPath)" -Recurse -Force
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
-} else {
-    Write-Host "Running locally from $($PSScriptRoot)" -ForegroundColor Cyan
-    Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Ignore
-    Remove-Item -Path "$File*" -Force -ErrorAction Ignore
-    Copy-Item -Path "$($PSScriptRoot)\$($ModuleName)" -Destination $InstallPath -Recurse -Force -ErrorAction Continue
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
+
+    # Check cache first unless NoCache specified
+    if (-not $NoCache -and $Script:CitrixWEM.ADCache.Count -gt 0 -and $Script:CitrixWEM.ADCache.ContainsKey($FQDN)) {
+        Write-Verbose "Returning cached NetBIOS name for '$($FQDN)': $($Script:CitrixWEM.ADCache[$FQDN])"
+        return $Script:CitrixWEM.ADCache[$FQDN]
+    }
+
+    try {
+        # Try local forest Configuration partition first (no credentials, uses current user)
+        Write-Verbose "Attempting resolution using current user context"
+        $rootDSE = [ADSI]"LDAP://RootDSE"
+        $configNC = $rootDSE.configurationNamingContext
+
+        # Filter for domain crossRef objects only (systemFlags bit 0x00000002 = NC_HEAD)
+        $searcher = [ADSISearcher]"(&(objectClass=crossRef)(dnsRoot=$($FQDN))(systemFlags:1.2.840.113556.1.4.803:=2)(nETBIOSName=*))"
+        $searcher.SearchRoot = [ADSI]"LDAP://CN=Partitions,$($configNC)"
+        $searcher.PropertiesToLoad.AddRange(@('nETBIOSName'))
+
+        $result = $searcher.FindOne()
+
+        if ($result) {
+            $netbios = $result.Properties['netbiosname'][0]
+            $Script:CitrixWEM.ADCache[$FQDN] = $netbios
+            $Script:CitrixWEM.ADCache[$netbios] = $FQDN
+            Write-Verbose "Cached bidirectional mapping: '$($netbios)' <-> '$($FQDN)'"
+            return $netbios
+        }
+
+        # Fallback: Try WMI trust enumeration
+        Write-Verbose "Not found in local forest, checking trusts via WMI"
+        $trusts = Get-CimInstance -ClassName Win32_NTDomain -ErrorAction Stop
+        $match = $trusts | Where-Object { $_.DnsForestName -eq $FQDN }
+
+        if ($match -and $match.DomainName) {
+            $netbios = $match.DomainName
+            $Script:CitrixWEM.ADCache[$FQDN] = $netbios
+            $Script:CitrixWEM.ADCache[$netbios] = $FQDN
+            Write-Verbose "Cached bidirectional mapping: '$($netbios)' <-> '$($FQDN)'"
+            return $netbios
+        }
+
+        throw "FQDN '$($FQDN)' not found in local forest or trusts"
+
+    } catch {
+        # If initial attempts fail and AD credentials are configured, try with Get-AdsiADDomain
+        if ($PSDefaultParameterValues.ContainsKey("*-AdsiAD*:Credential")) {
+            Write-Verbose "Initial resolution failed. Attempting with stored AD credentials via Get-AdsiADDomain"
+            try {
+                $domain = Get-AdsiADDomain -ErrorAction Stop
+                if ($domain.DNSRoot -eq $FQDN) {
+                    $netbios = $domain.NetBIOSName
+                    $Script:CitrixWEM.ADCache[$FQDN] = $netbios
+                    $Script:CitrixWEM.ADCache[$netbios] = $FQDN
+                    Write-Verbose "Resolved using stored credentials. Cached bidirectional mapping: '$($netbios)' <-> '$($FQDN)'"
+                    return $netbios
+                } else {
+                    Write-Verbose "Stored credentials connected to different domain (FQDN: $($domain.DNSRoot))"
+                }
+            } catch {
+                Write-Verbose "Get-AdsiADDomain also failed: $($_.Exception.Message)"
+            }
+        }
+        Write-Error "Failed to resolve FQDN '$($FQDN)'. If connecting to a remote domain, use Set-CitrixWEMADCredential first. Error: $($_.Exception.Message)"
+        throw
+    }
 }
-Write-Host "Module has been installed, to import run `"Import-Module -Name $ModuleName -Force`"" -ForegroundColor Green
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAg0MU/5oI3/zl4
-# JyoyiLFcM+j1RW6lvL9WOF/tBKlRhaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDIX+A2X/lNqWZg
+# 2D7GAiFSCR/Pe7IK7yQCIuaNCJkNEqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -272,31 +301,31 @@ Write-Host "Module has been installed, to import run `"Import-Module -Name $Modu
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCB5UUOel2YULeIJ26wyJAooI7+VF/Hw0dy844VRMhZh
-# JTANBgkqhkiG9w0BAQEFAASCAYDEZqZoKp29Sbu8T0jOFIaCIJCXVoH18VlegnzS
-# a+8bWPgrxbhcZnXz0JtlqOIVeNTJvK6eyIEhr+2hxt36fnRKZUs5eRg22A/Mnp/3
-# Yi/03SxNGN3UzDPOFFoH5XVuAzHWAnCg2xugJ/kehyCHoU+qyqC7jnRJc+eWQaiy
-# jtCv6gUfaTrVFC9rMWAy8UnS2NYcJhnT1zErpfXq83Nf2QqX9hyJI95Rd8QhkiwL
-# j2da7oYMDHbE8OakinyOmSo+v1tp6vp1+MBVHgOyS85ReiAEdU2bwq/q4NiSmIiX
-# 1qXplyvMZze3mj7ra9WMzhg3odNSZB4ZKSKMy3JgJ/4eeKmRjynF8oSkEcX2mxuC
-# AtIWajf8q9115of2v5RbLcpfCJ34aFfdiswPmA1vlw8/9/PILi1ophB2QBv75zRk
-# cnCDNlv//ALpubyhEp3a4d4FqOjJyv9vJzCJWtuBJbiVCwR4iu9SRQC9V92oulzM
-# BiGNGx/dNKp9P5Rt3ouTMXrIaX+hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCAn/pmxYYte7VdN1/NAFq7xaQ9h3jRdrqWD1QX54AmD
+# ajANBgkqhkiG9w0BAQEFAASCAYAvdzbcErmR92drb2hePRUNHame8D7FC5OvtScU
+# M956L2v0qf/z4X/Z55zcUWgnAQYKAcuoxSLBPv4CAudAviD8KynBHVdOJPjLqWfU
+# QQun6IUhv7ETcaZxPZ2pFLnEgvItMmHxV69Bq3Kw0d0Va0D1+i27y75JsVp+GBtM
+# nt92O1wA+IxOjBHIPZER/nBqXlV41yrSBfYEoV0LjoBfdk5q5Duj/M0xfT7/fd5a
+# nEsTlP3zrAjgVS/dumbHf1TI1CC99WvM3ni4fjvR2d8BA8KT7oirga2V5fYgvjHE
+# du/cePB8uXPzMsgrX8nbqwCJOAg3rFow9uVmA5gp+t2RSbConS0zto/Y6yGnophI
+# LOKeVPJC7XPV0PVmLrK3bDqpoM5bqVUiE36UBCTbjLoZ41CxXtBq+O8mbf1QfmG7
+# 9zdti8r5vePDaTHvBDpRpYKdEZ4o2vY5YPgg0nncYUaEhNR3b/BMDrRLGhbyGNsr
+# BLARJvkX+E1L6O8VZAPfatcjDe2hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTIxODU1MDlaMD8GCSqGSIb3
-# DQEJBDEyBDDmY+xy3Q1wxDtzx75CDV6msESgT8C/FQ9RNEptWycR0FQYbd1bOljM
-# /QjonFwqwYIwDQYJKoZIhvcNAQEBBQAEggIAem7wk7Cny4VuPS00iUOtxHlMMUt0
-# bSN1vvz5m44W2LsXnwglFT/ZnPGcWl5DKyrowPKDWQJ0+N0x/5H60qo3/gix/+ha
-# EI+jax9Rluw1Bi9+WO/XTpj4Z1UU/sYLkSnCJMQcOtw9LVOWc6153v5butmLSsGC
-# sRXtMhf0f4OFSkzZFfCMc2Mo7LgS3hTjVLxteb+0iwqjGOLWB/gi6ItsjtLN3AoR
-# U/7fUJnCPceah2DRtVdimT3WtFzk2jG3nuShGwNg+uUwuuGaghFDGMBySsjd7WSC
-# R9KcUQjDMSuvpfYSovX4JmLcYldgcCQDx00NPvaEpBsqv6TusfRimjhl+FdIIno9
-# GnxWFQML4iv4sOvxdJX0dp372f1z5EsQDCais+c1nExv1Zrw1yQqApXxPvn1OnpF
-# Rwf3CijcxkK5EFAfngv8V5mueocqJB/lAavulfS8eHwKKZL+b4t2ATrSToH9Y39O
-# NbeCN95PAFUpvXbT7LWB5gB0TeRmyuXtpKNdgfI2ztQmLp0fFPTb0nEHGVMwiU8q
-# jlI07Kncnw33k9prt/6juAWEtT0acu7+jfc20SE07My1rvSd1ygdn/VE1A6LAtqL
-# 3NikWgL/hcU0YvsVM+7unR1l9GSFBpWVg6SCQ/9UPOD9vM2mSove042X77KwttT8
-# azkDBjDmDCEnOK0=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxOTAwMTJaMD8GCSqGSIb3
+# DQEJBDEyBDDWnj6ptOZM7QKjxb9kChqOTunHsAMT0giOxOmyKBrc4hKmz8J8k6qd
+# /hUC7WvktTwwDQYJKoZIhvcNAQEBBQAEggIAI2sMtmmli1kpkAJGsaZNSH8y3qE/
+# xJooAxKd3ub2kA9VWCrpvfmE8NYDtF8Nu8cKSvrDeitiVPTsJg58Ex32jPZXWo12
+# lJB4OEeBhHqYxFNWYuFlj2Wnf0TIdejPYFo4uwF86zCq6HBqcKd/fA/ow59J54pg
+# c+Il/aX/7s9UfO2N/O+0JoTaDo+LN1ygVD4M/d7A+zo8k2xPXOcJUE024AHlzATW
+# Z4GXGKa3kyK6ewlZhQNiIzWXTTpO8VKQu9aQW3y6PfXCa0l1AkH8b477XaIOxp1A
+# 4nCjuFOkw2RNAwxzQrG6+nbhWv1bGPmSED8N/Czyunqt6yJdP0aX75BN4zb/EjpB
+# VK8lGSBMeOxHls2wdDeSxbvDLeiQ3+zQI2gBBDDwFcTUkijjc113DvnMmMJEV7Km
+# 3408rRVasPKD9fhxzHOYxLZs+7W/VXp9LqkksONrrMDOl69mCDKpYlo8KRnpF9Dw
+# bZUjv2lqSxNr/j3I+6XTb8w73LOMosxLI1g7uJsquSdzj3j+PK0Mf6g0trRa2Lbk
+# wfqroeq++b9IeelTN0Wy5KmxQB77XnDig/HiaCl4KLA+54Hwbh3yRX/7DPHXsVzH
+# Fn6RzkpGxDg79VcEKZAenvHTERcFdwWuKFgbwsjlExEpPRVZuyOQgOKEcZX5gvzM
+# YO/QnLf5v8JLIpA=
 # SIG # End signature block

@@ -1,4 +1,4 @@
-function Set-WEMActiveConfigurationSite {
+﻿function Set-WEMActiveConfigurationSite {
     <#
     .SYNOPSIS
         Sets the active WEM Configuration Set for the current session.
@@ -26,7 +26,9 @@ function Set-WEMActiveConfigurationSite {
     [Alias("Set-WEMActiveSite")]
     param(
         [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true, Position = 0)]
-        [int]$Id
+        [int]$Id,
+
+        [switch]$PassThru
     )
 
     try {
@@ -44,7 +46,11 @@ function Set-WEMActiveConfigurationSite {
             $script:WemApiConnection | Add-Member -MemberType NoteProperty -Name "ActiveSiteId" -Value $Site.Id -Force
             $script:WemApiConnection | Add-Member -MemberType NoteProperty -Name "ActiveSiteName" -Value $Site.Name -Force
 
-            Write-Host "Active WEM Configuration Set is now: '$($Site.Name)' (ID: $($Site.Id))"
+            if ($PassThru) {
+                return $Site
+            } else {
+                Write-Host "Active WEM Configuration Set is now: '$($Site.Name)' (ID: $($Site.Id))"
+            }
         }
     } catch {
         Write-Error "Failed to set active Configuration Set: $($_.Exception.Message)"
@@ -54,8 +60,8 @@ function Set-WEMActiveConfigurationSite {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCMNGEfnSor5YJd
-# z6gXLWmh2zM7PhgIIw7WeOQF/4dAZqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCC/fhaLXYZHbuKk
+# QbzyqMoEqQAnZeEuVR+ps6tS3/8/Z6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -231,31 +237,31 @@ function Set-WEMActiveConfigurationSite {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCCQ10npMV4U68fq5HVDHt+yG7m1f1w+/cIGng3RYtWf
-# 1zANBgkqhkiG9w0BAQEFAASCAYAklAybx+yQ4RUMlK+gZcjKFHPFrvSoEJCUqz9V
-# PcKGNaLxCTA4NLJGA6ArCxOVBtufQdTfT1WuWF1kiEsPNj3mRHRXQ7AX/YAeH2vA
-# Mc+mHtQtHWF3FyTWCgyiudQ/C5jfC8zFPV4ZxBZOnpthZLB/3VtvzXXXYV1eWq2S
-# LXK+SIQIbImWTXn3PKgydtFNTJYteYG5o9+Bl3074s9yDUTUOol3HSIAQcoSIAlz
-# Ti47guVk4bV8Ral7iSVfSNw5qpNfUz1Hz+nE07ZhKfQd8hSSB2qShhwabXtSv2uA
-# zvRPXg6SrO5SGJyYuY0c7a99phm0eqHmqmOa83LagH6g6CJiKTpAA58N4bKBw3hL
-# VBZlADz4dYEaPScJZGYT7IxvollNJCb1ydnPeW5/OpiFwhRJe7AV953o7JUdVGPN
-# OMX9aIz1Ol93fYPfsywKt6GruDnU2t5T86iCzdStqphGQ6PyRe8HhzHb4gI5jaDt
-# HG6EVphtcu3SM3e0fSedyC53LdihggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCCS2ShhmkXYllSSqbqmYv4bmcw0EGLtZ+LYZiNVpgWN
+# FDANBgkqhkiG9w0BAQEFAASCAYB6QtJd1pBijM9rDhOiIIF1426dFzpGgMAkVeIV
+# q22vZQvY46K8SwEBMp2QrqNG4XpPjS5J9xVtoBelh7/yvcl+yN0iVAJWKwKXzwS+
+# gUIVplggK4WKgeuIjGoY812XzOKiCML/P+mRGmPnxwEt5K1lnxTqW9Oj7dUJT13p
+# 8CVGdghqAsLm72VYwR1r++XbCEK90rJjuqKk++yIwgZ4/bcBnBkQtnwpYOh6YELF
+# gkHusAVkefBUNN6GQvqHDdN6WWj19yNsrFoH7i7LaBDK1smDbZBo182nhzupFx9x
+# 2UvZz0L0Xo3oMLdnRMa7/cql26mpdFoOEOgjt/l62T3PLJ3YHdB8MtyxIq8kfzUI
+# aDYhS7mjiYNC+tWCIO+BmTHcEmGoXPL04AFjeHrpKzm12l1l4AHHoWkAJ52S6Xv4
+# ZX5rinv3psv/FLFWWwRyN6HoQ6aSE8xHcULLy6bewBdlJl02SInRzp5fmk997HY8
+# fz5lYATOXQWXOuuBX17h71yVqIGhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU5MjJaMD8GCSqGSIb3
-# DQEJBDEyBDDMoeB/tywsm8YIrS8I/kWuPUXtNRlFuPhuSGC0eeg30TPYmsMOvcIV
-# JBBhtf74SKkwDQYJKoZIhvcNAQEBBQAEggIAqC/NMsAbZ81fG2jVMn0QaM7nlodg
-# //ag0vt9pZfme9eArn0mhLhDG50Rax84tltskkwRVEJ+h7c5IvgKzjuC5c3D6RiC
-# V2RkwE4Kxj96Q2ZJZvPLB14XEkqqwIPqiexXsJunYSmXLYIexk8jRI9vhEoEU9ib
-# cHIHwAiG4+8MoPv/IiTn4o4g16dBKa7qjJyCai9W3OfZxNTrYGCKy0DDuBYUTFKh
-# OqTX627pm2DCy2uPwAIN4KVkMsF3zClCFAAKdfNN0zTPRfLFXOL+Jiyp7YzElTgW
-# tEe/0vzWg+X2X5SrYxVaA/qINHwExxrsPDFBaTpqnQaUHiYNt/fK1m8P0AnrZX8W
-# BUzjKZY97RfhKoKI1IHz10o+uc7xRcpQ/wtWms8F9DXQbk6gKhIdAc1OJlyZJmbg
-# ufYSTVXkvZZS3blRkTw2JtyFofyYNw40xrfBlAzjzBEi6q0MkJTLdrGz15txArXs
-# H/fS5lsNwOs1I/IPsy+IzU92jkydOhRVv610O7awILqhk1q3bPRQs73Vp1lJUXfs
-# G5g5Go0wT1Kgh4hNYdK+VGO3kL7Brv+7SJvmaholBDVV2cDVW7NUP3an+ltF89Wa
-# MsiYQGoW7lPHUykwpaLzEWp6BcxEgE6rSFtKfYfnSt6l7L3AU0s7oySDluTXUH06
-# XBidsE9sRrowGqQ=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxODU2MDBaMD8GCSqGSIb3
+# DQEJBDEyBDDX/OMIdpXKaAPPARVi1Uw+PD6ZD2mvoz0YXsOke9tCJeKvrIVLwhHq
+# 64+BazTtUhMwDQYJKoZIhvcNAQEBBQAEggIAEfXOAuXYonluz6bDiZq0goPW6o2m
+# KNW/MC0NnKQ1bZciYrhdjsPV1Lp725u6a/DKH8Vy1CqgtivcB87nttttMHgZz3To
+# rdy+Y8B+tK+8zRWeY1DSIB+sRRQaVZg9nR1cKiMC1dXyNt7Xl9JNqlrZ045xYG2g
+# fZDxdhqOXSGx9rDcwcmZ1bkDBirY34zQpwxUAsZ41hd9TK5/OTHQNkyXYmPbX2p6
+# AQ+ff4QIUsUK1stDAkdvy0HuoLk7FblLFBhJ7qnvZvN7YKxmel89uQr3jmco4B7k
+# apsWeZx4b16Ny1cM2pX5EOixIRHFq3TXshC4g6Z24yVWezrJAuuQi2yqS4Hdh1Be
+# HT+t1wVv4NF1a1bSZbw3snZFgtqcfI7rCvEz+FeS7irKRmGMg/Nhra4bST/J5Hji
+# TwyDPfhlztI+1stp26NSfePsC1qaRXW+9+Zl90/g0hBJrFqgbyL3sryX7tBsEZ/M
+# ddHy5iDrrEE/71vksSTKpOhdDtoZLbL2LMtjj7JsHsdszoQof4Sm8Cy/w7l1w5GN
+# e+i9qzsulgQ1lrjFBB5NurJYorR2sFbG/6xYZUQsofW74oQyrsKYZ1wfMpxyPOt0
+# YsPyarbV01PtIDFMYhucW/n8ZJNeUOlwLRjWzNLG64hBsPBaH3+CJ59e8PTs+uLF
+# EcI0zESU/UeH/h4=
 # SIG # End signature block

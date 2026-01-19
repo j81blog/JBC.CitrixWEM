@@ -1,4 +1,4 @@
-function Disconnect-WEMApi {
+﻿function Disconnect-WEMApi {
     <#
     .SYNOPSIS
         Disconnects the active Citrix WEM API session.
@@ -34,6 +34,12 @@ function Disconnect-WEMApi {
         # Write a warning if the logout fails, but proceed with clearing the local variable.
         Write-Warning "An error occurred during server logout, but the local session will be cleared. Details: $($_.Exception.Message)"
     } finally {
+        try {
+            # Clear any stored credentials securely.
+            Clear-XDCredentials -ErrorAction SilentlyContinue
+        } catch {
+            Write-Verbose "Failed to clear stored credentials: $($_.Exception.Message)"
+        }
         # Always clear the script-scoped variable.
         $script:WemApiConnection = $null
         Write-Host "Successfully disconnected from WEM API."
@@ -43,8 +49,8 @@ function Disconnect-WEMApi {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCC0DvBDuexi086m
-# TxWhLP4ZNAw5c4iGCjddAlIvb99nmaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDOEI5OT6kDfB3i
+# rxx5uoywpq3KmAHVH3XGLIlT5my436CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -220,31 +226,31 @@ function Disconnect-WEMApi {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDzlmAiGCfYlqgdOOKa3BsH7uDolPW+DIfo8KAgJqjD
-# NjANBgkqhkiG9w0BAQEFAASCAYC31If6DBNt3gzMz5v2Oy29yd98redd2j7ts838
-# A8P2OMoSNAdpTaS8L8ccyEPAw1AMHIuvhkuhAJ5fOZg8Vpe/58CS44Bhwz9KZ90o
-# eYXmNgyUHTeTGysN6pLlCSy9d4HGU0Ixx+wvFg8dt+y/ubuQ0i0uV9Ga9kXghgsX
-# /AJCVOMLg0Yl0+lwWbYWus/sBnE4Zv7nXtyiUkEruEkNSMq0sbL2tU+cdq2cD0NH
-# EOMUAz3PDbec57W/4OyvfXkwWNtlLslzZvgMUonfGKVZtNjKZNQMYxA/+gBb+2kL
-# Xmr0oWiIuixBhhkM6XgdVy6u99ob7y0EGyQx1Z6SFQh3ASR44V2Of3RTy00XG0iD
-# dzjgHTS1vYrHqFnfTSQcQ2lFU9nXNp/LB0dqbznmhCOoykNzs7sUm7sI4T2ygRq4
-# c2le+Ca8o2jPBQCU8fyuCEtD5D2LDDx/G7h4KmZJTxmDHTOpcB9lW1HJJ93oQY+v
-# K4l/Vc9z06K9Ch6sz91mHchM7K2hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDo2gDR8xTm7RX/2cLJNVnm/SGBomVaFUC/1mLfnYkk
+# tTANBgkqhkiG9w0BAQEFAASCAYAj1stsbyOuV5JqPEtOYGgF2+jFbe786SB1fB5k
+# W6fh5EjRNDY1w85yRQQlmT7qhcmsMlSWGTTSFiepCxTBZw9XVozMKusZlBTqtGlt
+# ff+UQbLrtKVRJnsDsThFZGCKSgaPz342rY1f3qdndU04Obd85C/7GZ/5spAsuWva
+# kQiaztDOi7rGYL4upAmMW/W9HC3mmen2zV51PWn2unRAb0LKivis2nK0h42iSz1O
+# fSwPOLY2dKfPrtdMEVfKAo++DbWKApC4quEv98P3wA7a9xmq+JfzVoxk5WmUuJy0
+# qw+psZP4HtftZTeWU6bSO2OZAWy0/ACaMEXB8F3J8LSqWNcVamQ+Mx0E0kWLJz0k
+# O0S1g8npMcvl2kiTEL+JMZLYlZQF+laIaeSKFzrYXW9CP8sVnIB9pd0pm2qYXkso
+# lyKXzvthyyS4SnDPxHrBMZLLMautCLARcHJN1VE3gCAmMq6+Q7hZjzSIedbtWtfZ
+# cyACo7FoO8B/NDsc8Xrnc09w2QahggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU2MjhaMD8GCSqGSIb3
-# DQEJBDEyBDA/3N91JDvSVGfBucrr7rSRDB9oY3YLt5iSj0Mpqsr71+R1MIicCgTi
-# fIZvg3hiW3gwDQYJKoZIhvcNAQEBBQAEggIAymgRmw0p7IfqxhRsFQ/hwNW+PpBK
-# xmjDdvOUXYMoB4H3e8n9QZPdqPjORc0H/QRaf+n2Vz+xlZFg9WNQQ3wb2PeBEonl
-# sTPh4Tfz7QWEiIHSCcRhXgqQAa9w3aJ6NkaQzPencDb+sufyPxVi7CmbAf4+lXv+
-# BaI+LubI8BERecMTR9jv6FDOd4z/GDJXMfpYLXagT8Uyt8hfo0gbuE02rRri6VLJ
-# Zmh40q7x0GTqqVb4l2vUaYJMqrxMeTCkpUelXF2PoGoYo9IcTFrLHAHrPr30q+He
-# FIOFgY+hKmmp2I5TR2E1M6eXU2FBg7rzeNwSLOPAErlpA0e9FnB+TTMmudRHZ972
-# D6nBncdUrEgzbTO6YsQy5w7drSBsteZGaV7uCx/VaqvEaWmlTuJlVchuj0ScBk1v
-# 7fYeh1FJsaosBwswvEgO19mfFiUHXjqDyPigU+UAxgR/VMGai0TpkZzMiW7W+1uE
-# 8pERXby69+7UVuvz2LHEGrsSmyRdc42kzt9aNnIk8otA4dstI1pPzOYtBZsVg2qa
-# 9wyrcdaYnCm3M3zbKiFRFnFPzPWRVIajl4a0X8NPj1z7fUdxlIShIj2w+xcfA41S
-# r4Qp0ZUDvbWV7lXT67jbsV0/7yU3UMSWWdGE5dOk3RZvnsKpZYg6FExQk93vOIVm
-# pOjqZbeE/Z87jkg=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxODU1MzJaMD8GCSqGSIb3
+# DQEJBDEyBDAg2LHXLb99TuuWzR+V6h6bYVFGvvBnOzoaq7IJVSMFbYcxxlZKDUqc
+# 4okzx9jI93UwDQYJKoZIhvcNAQEBBQAEggIAax65MJ3b2RotAK5vmuC1URuRxiLO
+# +5l/fxiId07Cw5gitKt4FeO/QfeojRrtPFqwtZ29ILhRAqK0wRAY6O+E7/A6ZqBO
+# 0zq2GVNkPojssYMunLanWvesCdkQpbCvdCSH0H/f+rHGYabyD3t/xOoWUikDXSCU
+# 9XR9g5Xa7XdozHM1maaV87V2yQGvES2VrZeBldJ52vGbT+8b1vryrM3wWiRsZUKm
+# VmkGny25VdNpdEN5m+E+SyAsglhN8tdoeL+dqxRSIaikPeDkmaVwf+PZpseZ5ap7
+# bE8JwXRgB2o+Rp+G2+Zzx7Tufd2cZCaooH85STtKqEP6U/sQMFFhU6vogM6koto2
+# 8qmKGPxIh4NKh9Ae2IOvnUDcZqv56IpdsSvROJMDnClmihNwwwT0z/N8xfO67PJx
+# ucw4QY+k4D43QQqTATVqzYRmxmX9JOx+gNg/J8eSmidi0HBeWaVpzSEVDrsexflh
+# zh3nZlZyTYrcTLrbJpYNv3hx1CK/4akcHgm3wQBs1csZtuSuP/f9fg5oIxQbfoVl
+# AlVmMVc365rE9MohHOXfyIjU28MU38DlHxF1UtsyaLp7gIK03fkQ/UJLkQZwMFTg
+# rcP9L5uZiLHBm3XHVVsUfws3rG02jkWU/XU8RgVDhnJAXSnqKWaG8ZwEDTqzlN0N
+# ZrBmVRRFpDNOJbs=
 # SIG # End signature block

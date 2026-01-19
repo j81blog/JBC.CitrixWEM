@@ -1,12 +1,19 @@
-﻿function Get-IvantiWCApplication {
+﻿function Get-IvantiWCPrinterMapping {
     <#
     .SYNOPSIS
-        Retrieves Ivanti Workspace Control application configurations from XML files.
+        Parses Ivanti Workspace Control XML file(s) to extract printer mappings.
 
     .DESCRIPTION
-        Processes Ivanti Workspace Control XML building block file(s) and extracts application
-        settings, assignments, and metadata. Supports both single large XML files and
-        directories containing multiple separate XML files (one per application).
+        This function reads specified Ivanti Workspace Control XML export file(s), filters for printer mappings,
+        and transforms the data into structured PowerShell objects or a single JSON string.
+
+        Supports both single large XML files and directories containing multiple separate XML files.
+
+        It processes each printer mapping to:
+        - Convert the printer's SMB path to a Fully Qualified Domain Name (FQDN) using a helper function.
+        - Determine if it's the default printer.
+        - Extract associated access control objects (users and groups).
+        - Collect other metadata like comments, location, and driver names.
 
     .PARAMETER XmlFilePath
         (Legacy parameter) Path to a single Ivanti Workspace Control XML building block file.
@@ -14,40 +21,54 @@
 
     .PARAMETER XmlPath
         Path to either:
-        - A single XML file containing all application configurations
-        - A directory containing multiple XML files (one per application)
+        - A single XML file containing all printer configurations
+        - A directory containing multiple XML files
+
+    .PARAMETER DomainFqdn
+        Specifies the domain FQDN (e.g., 'corp.domain.com') to append to any printer SMB paths that are not already fully qualified.
 
     .PARAMETER AsJson
-        Switch to output the results as JSON format instead of PowerShell objects.
+        If specified, the function collects all results and outputs them as a single, multi-line JSON string.
+        Otherwise, it streams each printer mapping object to the pipeline as it's processed.
+
+    .PARAMETER ExportFor
+        Target system for export: AppVentiX or WEM.
 
     .EXAMPLE
-        Get-IvantiWCApplication -XmlFilePath "C:\Config\IvantiApps.xml"
+        PS C:\> Get-IvantiWCPrinterMapping -XmlFilePath "C:\IvantiConfig\Printers.xml" -DomainFqdn "corp.contoso.com"
 
-        Processes a single XML file (legacy parameter usage).
-
-    .EXAMPLE
-        Get-IvantiWCApplication -XmlPath "C:\Config\IvantiApps.xml"
-
-        Processes a single XML file containing all applications.
+        Description
+        -----------
+        This command processes the 'Printers.xml' file (legacy parameter usage).
 
     .EXAMPLE
-        Get-IvantiWCApplication -XmlPath "C:\Config\Applications\" -AsJson
+        PS C:\> Get-IvantiWCPrinterMapping -XmlPath "C:\IvantiConfig\Printers\" -DomainFqdn "corp.contoso.com"
 
-        Processes all XML files in the specified directory and outputs as JSON.
+        Description
+        -----------
+        This command processes all XML files in the specified directory.
+
+    .EXAMPLE
+        PS C:\> Get-IvantiWCPrinterMapping -XmlPath "C:\IvantiConfig\Printers.xml" -DomainFqdn "corp.contoso.com" -AsJson | Out-File -FilePath "C:\Output\printers.json"
+
+        Description
+        -----------
+        This command processes the XML file and outputs as JSON to a file.
 
     .NOTES
-        Function  : Get-IvantiWCApplication
-        Author    : John Billekens
-        CoAuthor  : Claude (Anthropic)
-        Copyright : Copyright (c) John Billekens Consultancy
-        Version   : 2025.1111.2145
-    #>
+        Function     : Get-IvantiWCPrinterMapping
+        Author       : John Billekens
+        CoAuthor     : Claude (Anthropic)
+        Copyright    : Copyright (c) John Billekens Consultancy
+        Version      : 2026.118.1
+        Dependencies : This function assumes a helper function named 'ConvertTo-SmbPath' and 'Test-SmbPathIsFqdn' are available in the runspace.
+#>
     [CmdletBinding()]
     param (
         [Parameter(
             Mandatory = $true,
             ParameterSetName = 'ByFilePath',
-            HelpMessage = "Path to the Ivanti Workspace Control XML building block file."
+            HelpMessage = "Path to the Ivanti Workspace Control XML configuration file."
         )]
         [ValidateScript({
                 if (-not (Test-Path $_ -PathType Leaf)) {
@@ -72,6 +93,12 @@
 
         [Parameter(
             Mandatory = $false,
+            HelpMessage = "Domain FQDN to append to non-FQDN SMB paths."
+        )]
+        [string]$DomainFqdn,
+
+        [Parameter(
+            Mandatory = $false,
             HelpMessage = "Output the results as JSON."
         )]
         [switch]$AsJson,
@@ -81,7 +108,7 @@
     )
 
     $JsonOutput = @()
-    $ApplicationsToProcess = @()
+    $PrintersToProcess = @()
 
     if ($PSCmdlet.ParameterSetName -eq 'ByFilePath') {
         $XmlPath = $XmlFilePath
@@ -90,16 +117,14 @@
     # Determine if XmlPath is a file or directory
     if (Test-Path -Path $XmlPath -PathType Leaf) {
         # Single XML file mode
-
         try {
             Write-Verbose "Reading and parsing the Ivanti XML file at '$($XmlPath)'."
             [xml]$IvantiXmlData = ConvertFrom-IvantiBB -XmlFilePath $XmlPath
         } catch {
             Write-Error "Failed to read or parse the XML file '$($XmlPath)'. Error: $($_.Exception.Message)"
-            return # Stop execution if file can't be read
+            return
         }
-        Write-Verbose "Retrieving application nodes from the XML data."
-        $ApplicationsToProcess = @($IvantiXmlData.SelectNodes("//application"))
+        $PrintersToProcess = @(@($IvantiXmlData.SelectNodes("//printermapping")) | Where-Object { (-not [string]::IsNullOrEmpty($_.printer)) })
 
     } elseif (Test-Path -Path $XmlPath -PathType Container) {
         # Directory with multiple XML files mode
@@ -116,13 +141,13 @@
         foreach ($XmlFile in $XmlFiles) {
             try {
                 [xml]$XmlData = ConvertFrom-IvantiBB -XmlFilePath $XmlFile.FullName
-                $Apps = @($XmlData.SelectNodes("//application"))
+                $Printers = @(@($XmlData.SelectNodes("//printermapping")) | Where-Object { (-not [string]::IsNullOrEmpty($_.printer)) })
 
-                if ($Apps.Count -gt 0) {
-                    $ApplicationsToProcess += $Apps
-                    Write-Verbose "Loaded $($Apps.Count) application(s) from '$($XmlFile.Name)'"
+                if ($Printers.Count -gt 0) {
+                    $PrintersToProcess += $Printers
+                    Write-Verbose "Loaded $($Printers.Count) printer mapping(s) from '$($XmlFile.Name)'"
                 } else {
-                    Write-Warning "No application nodes found in file: $($XmlFile.Name)"
+                    Write-Warning "No printer mapping nodes found in file: $($XmlFile.Name)"
                 }
             } catch {
                 Write-Warning "Failed to load XML file '$($XmlFile.Name)': $_"
@@ -133,141 +158,128 @@
         Write-Error "XmlPath must be either a file or a directory."
         return
     }
-    if (-Not [string]::IsNullOrEmpty($DomainFqdn)) {
+
+    if (-not [string]::IsNullOrEmpty($DomainFqdn)) {
         Write-Verbose "Using Domain FQDN: $DomainFqdn"
         $DomainNetBIOS = Get-ADDomainNetBIOS -FQDN $DomainFqdn
     }
 
-    if ($ApplicationsToProcess.Count -eq 0) {
-        Write-Warning "No applications found to process."
+    if ($PrintersToProcess.Count -eq 0) {
+        Write-Warning "No printer mappings found to process."
         return
     }
 
-    $TotalNumberOfItems = $ApplicationsToProcess.Count
+    $TotalNumberOfItems = $PrintersToProcess.Count
+    Write-Verbose "Found $($TotalNumberOfItems) printer mappings to process."
+
+    # Initialize collections for tracking
     $Counter = 0
-    Write-Verbose "Found $TotalNumberOfItems applications to process in the Ivanti Workspace Control XML."
-    for ($i = 0; $i -lt $ApplicationsToProcess.Count; $i++) {
+    $PrinterGUIDS = @()
+
+    foreach ($Printer in $PrintersToProcess) {
         $Counter++
-        $Application = $ApplicationsToProcess[$i]
-        Write-Progress -Activity "Processing Applications" -Status "Processing item $($Counter) of $($TotalNumberOfItems)" -CurrentOperation "Application: `"$($Application.configuration.title)`"" -PercentComplete (($Counter / $TotalNumberOfItems) * 100)
+        [string]$PrinterName = $Printer.printer
+        Write-Progress -Activity "Processing Printer Mappings" -Status "Processing item $($Counter) of $($TotalNumberOfItems)" -CurrentOperation "Printer: $($PrinterName)" -PercentComplete (($Counter / $TotalNumberOfItems) * 100)
+        if ($PrinterGUIDS -contains $Printer.guid) {
+            Write-Warning "Duplicate printer GUID '$($Printer.guid)' found for printer '$($PrinterName)' in Ivanti Building Block. Skipping this entry."
+            continue
+        }
+        if ((Get-Command -Name ConvertTo-SmbFqdnPath -ErrorAction SilentlyContinue) -and (-not [string]::IsNullOrEmpty($DomainFqdn))) {
+            [string]$PrinterPath = ConvertTo-SmbFqdnPath -Path $PrinterName -Domain $DomainFqdn
+        } else {
+            Write-Warning "The Printer mapping is not a FQDN, but a single name. Best practice is to use FQDN."
+            [string]$PrinterPath = $PrinterName
+        }
+
         $Enabled = $false
-        $State = "Disabled"
-        if ($Application.settings.enabled -eq "yes") {
+        if ($Printer.enabled -ieq "yes") {
             $Enabled = $true
-            $State = "Enabled"
         }
-        if ($Application.settings.enabled -eq "no" -or [string]::IsNullOrEmpty($Application.settings.enabled)) {
-            $Enabled = $false
-            $State = "Disabled"
-        }
-        $URL = ""
-        $Parameters = "$($Application.configuration.parameters)"
-        $CommandLine = "$($Application.configuration.commandline)"
-        $WorkingDir = "$($Application.configuration.workingdir)"
-        $DisplayName = "$($Application.configuration.title)"
-        $Description = "$($Application.configuration.description)"
 
-        $BinaryIconData = $null
-        if (-not [string]::IsNullOrEmpty($($Application.configuration.icon32x256))) {
-            $BinaryIconData = $($Application.configuration.icon32x256)
-        } elseif (-not [string]::IsNullOrEmpty($($Application.configuration.icon32x16))) {
-            $BinaryIconData = $($Application.configuration.icon32x16)
-        } elseif (-not [string]::IsNullOrEmpty($($Application.configuration.icon16x16))) {
-            $BinaryIconData = $($Application.configuration.icon16x16)
+        $Assignments = @(ConvertFrom-IvantiAccessControl -AccessControl $Printer.accesscontrol -IWCComponentName $PrinterName -IWCComponent "Printer")
+
+        if (-not [string]::IsNullOrEmpty($Printer.backupprinter)) {
+            Write-Warning "Backup printer setting is not supported and will be ignored for printer '$($PrinterName)'."
         }
-        if (-not [string]::IsNullOrEmpty($BinaryIconData)) {
-            $IconStream = Convert-BinaryIconToBase64 -IconData $BinaryIconData -Size 32
+
+        if ($Printer.comment -and $Printer.location) {
+            $Description = "$($Printer.comment) ($($Printer.location))"
+        } elseif ($Printer.comment) {
+            $Description = $Printer.comment
+        } elseif ($Printer.location) {
+            $Description = $Printer.location
+        } elseif ($Printer.description) {
+            $Description = $Printer.description
         } else {
-            $IconStream = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAABxpJREFUWEe1lwtwFOUdwH+Xe1+Oy93lcpiEJEgxg5SnSCkiBRuhAwXSIE8ZKhRbS0tFLEPB4hBERdQSi0OlrWOjHRlFQShCi0TLK7wESQgRI+ZV8oCQkFyyt5e927vr7CZ3JELglHZndr7d7/b29/v/v++/+62G/9O2PPcttzYoL4jTxk3T6vRjwqFQW3HxkXkfbv/zIaANCClozf+KHwFqtNpxWq32fovZaMvs34fkZCfJvZ1UVF7i44On21/IXTAZ+Azw3JbAsmXbzAar8JsIMN5isg3ITKNPSiIpyYno9Vr8/iCSX8YfCCLLQbbtOMCzq+etAt4HvvpGArm52wztCD8FbY4SoclosGX2TyE9za1CrVYzkiTTLgXUVvIHCYXCDH5nHpqQTOmjO3h3635FIA/IB87eVCAC1IQ1D8Tp9FNNJkOvAXelkpHuJj01iV69LPgDMj5fAF97xy7LyrCGWVTi4rTHyLkfN/PdzUrG4fwT+9j6+oeKwCudAsXXCeTm/s0e0OqOhsPhXmazqc/dmWncmeEmIy0Jm82iptQr+hF9HbsCDIfDKqCjCaM09xT2waCFoqke4r84jDd9KD5Rwwc7D91cYPWzb4cXL5pEgs2MxWxUgYIo4fX6VXBADqrAfXtPU1tzlXirkVlzx16Dd7hwxm9luEOitdGDr1XEEm/E5bLxznsxCKz7/cPUXfIgiH4KPipizNiB7N9XRKvHS1NjG4GAHC0cW4KFh+ePVyP3+2W8og9RFAmFQiSnJJLoSsCRaMNoNmICcp/beusMPPPUXM5+XsfO7cdoafaqQOXmymYyG4iL03BHshOr1cSgIWlRqC0hHndvBympLmwJVrXIlYRE2nhgbSwCa1fNpbi0ltde3YNer1Oj6ZOepAKVER44KBVR9BEOyyS5naSmunC5HeiUa78GjZwrIjbgmVgEclfOobi0hlaPD4vViNfrQxAENbVutxO3205KahLmeEXoWoQRWEtJntpvHbxMbSPXOIF1sQis+d1sCg6U0CYImM0GeqtpTcKVZO92wxvBFYmqLRp8sgtLQjz2MXmY+uWo/3MBz8Ui8PSK2eoTa8qUMdEoe4J17Y8cV2/WMGrhGVobK/ny42W0iUFSZ+4mzT2M52MRWL18Fu/tPMj02Vk3jVgr+yh5LRWzrlktw1AIQp3t/bPWQGM+pKyhprqFsoInGb08zPr1MVTBU7+dyfZdh5jWKXCjiaWXfVS8mcLdD6wgPmUGhLzR0gxrjGha3oW6tWpfs28op05WM3ppMxteiEFg5bIZfLD7MJNnZ103q5U064ISlW/cweAJT2NO/glUTAdRfape27R2CLbgE6HwKFhnnGFgxjBe2hCDwIqlD7FrzxEezBlB/dt3quk19s3GNfol9CYnFW/1o/89D2FPvRcuv6jCZRlKSkBqB70BRoyAQACOH4fgyDfQD1jIIBu8/GIMAssfn87uvYWMUwRedzB0fiVXzufTVL6T1svFDJm4koT+S+Dir6FlF/V1UPqVHX3fbLD2RTyxlklLdlC8fTr1lkcw/zBfnRvDHLDx5RgEnlySw55/HWXs7CxqX9Vw34w1IFWBPRtMAzrSfGkDNL1JXS2UVmfQK/uACg+GoPmvDu76/lK+PLsTy8yi6OQcmQR5f4hB4IlfZfPPj44zakYW9Zs0/GDOmuiE6jrMtTVQUmbHkv1vNM5hUVD7mTwCtQcxjM8npLdH++9Lhj9ujEHg8V9OY1/BCYZnZ3HlLw70cSEyv9OKwwk6XYdCVSV8rqR99EZ0mQuj5aekWslC15KMHI9Lg015MQgs+cVU9n9ykoGTswj4JaRzf8J3ZiMhoSZa73EZ2ehG5KJxDFPhPUGdJnCZwiSZgmhkic1bdt36bbj40Sl8cuBT+k/I6rhx5CHT5bhbf5ff4zQQgTr0Mpqgn4ryGo5/WkaLx4sgeNrz1i/eBPwdOHfdikhZkDy2cDIHDp8mbXxWt1TeCppkCuEyyvh97VRV11NRWc+F8noar9QJgYAk/eP9LUcaLl+sBoqAAuDiDQV+/sgkDhV+hntMd4Gu4xqJNAoVRcor6jh+qgxRWUEJbYHTJwsulJ49dqHh8kUFVA8o8P90gi8B7TcU+Nn8H1F4rAj797oLGOLAaQaHXok0gOTzqdATp8oQhHZ8onAzaANwtfODROp8S6sTutuHiTIEC+ZN5NiJYizDs4hAk81BrFq5A1pex+GjpUj+gLJYCR87vPt8D5H2CO1aztcJzJ8zgfNlVQy8dwh2QxhREKisauBCeS0Xaxu/daTdXxbXzq4TmDRxFA0NV9WlWNPVVmrrm5AkKXSicO8XtxNpTAKLHlu3Kr1f5vMaDbR6PN9qTHsCxSSgrJwyB4zMEYSmoXU1FQHgSpfZG9OY3q6A8rBNBFIAfecX7A1n7zcF9XT9fwHj4Gdd/ykNBQAAAABJRU5ErkJggg=="
+            $Description = ""
         }
-
-        $StartMenuPath = "$($Application.configuration.menu)"
-        if ($StartMenuPath -eq "") {
-            $StartMenuPath = "Start Menu\Programs"
-        } elseif ($StartMenuPath -like "Start\*") {
-            $StartMenuPath = "Start Menu\Programs$($StartMenuPath.Substring(5))"
+        try {
+            $Name = $PrinterPath.Split('\')[-1]
+        } catch {
+            $Name = $PrinterPath
         }
-
-        $Assignments = @(ConvertFrom-IvantiAccessControl -AccessControl $Application.accesscontrol -IWCComponentName $Application.configuration.title -IWCComponent "Application")
-        $IsDesktop = $false
-        if ($Application.configuration.desktop -ine "none" -and -not [string]::IsNullOrEmpty($($Application.configuration.desktop))) {
-            $IsDesktop = $true
-        }
-        $isQuickLaunch = $false
-        if ($Application.configuration.quicklaunch -ine "none" -and -not [string]::IsNullOrEmpty($($Application.configuration.quicklaunch))) {
-            $isQuickLaunch = $true
-        }
-
-        $isStartMenu = $false
-        if ($Application.configuration.createmenushortcut -ieq "yes") {
-            $isStartMenu = $true
-        }
-        if ([string]::IsNullOrEmpty($workingDir)) {
-            $workingDir = Split-Path -Path $CommandLine -Parent
-        }
-
-        $isAutoStart = $false
-        if ($Application.settings.autoall -ine "no" -and -not [string]::IsNullOrEmpty($($Application.settings.autoall))) {
-            $isAutoStart = $true
-        }
-        $WindowStyle = $Application.settings.startstyle
-        if ([string]::IsNullOrEmpty($WindowStyle) -or $WindowStyle -like "nor*") {
-            $WindowStyle = "Normal"
-        } elseif ($WindowStyle -like "max*") {
-            $WindowStyle = "Maximized"
-        } elseif ($WindowStyle -like "min*") {
-            $WindowStyle = "Minimized"
+        if ($Printer.default -ieq "no") {
+            $IsDefault = $false
+        } elseif ($Printer.default -ieq "yes") {
+            $IsDefault = $true
         } else {
-            $WindowStyle = "Normal"
+            $IsDefault = $false
         }
 
+        # Construct the final output object for this printer
         $Output = [PSCustomObject]@{
-            Name    = $DisplayName
-            Enabled = $Enabled
+            PrinterPath = $PrinterPath
+            IsDefault   = $IsDefault
+            Comment     = $Printer.comment
+            Location    = $Printer.location
+            Description = $Printer.description
+            Persistent  = $false
+            Enabled     = $Enabled
+            Driver      = $Printer.driver
+            GUID        = $Printer.guid
         }
         switch ($ExportFor) {
             "WEM" {
                 $WEMAssignments = @($Assignments | Select-Object Sid, Name, Type)
                 $Output | Add-Member -MemberType NoteProperty -Name "WEMAssignments" -Value $WEMAssignments
                 $WEMAssignmentParams = [PSCustomObject]@{
-                    isAutoStart   = $IsAutoStart
-                    isDesktop     = $IsDesktop
-                    isQuickLaunch = $IsQuickLaunch
-                    isStartMenu   = $IsStartMenu
+                    isDefault = $IsDefault
                 }
                 $Output | Add-Member -MemberType NoteProperty -Name "WEMAssignmentParams" -Value $WEMAssignmentParams
-                $WEMApplicationParams = [PSCustomObject]@{
-                    startMenuPath = $StartMenuPath
-                    appType       = "InstallerApplication"
-                    state         = $State
-                    iconStream    = $IconStream
-                    parameter     = $Parameters
-                    description   = $Description
-                    name          = $DisplayName
-                    commandLine   = $CommandLine
-                    workingDir    = $WorkingDir
-                    url           = $URL
-                    displayName   = $DisplayName
-                    windowStyle   = $WindowStyle
-                    actionType    = "CreateAppShortcut"
+
+                $WEMPrinterParams = [PSCustomObject]@{
+                    Name        = $Name
+                    PrinterPath = $PrinterPath
+                    DisplayName = $Name
+                    Description = $Description
+                    Enabled     = $Enabled
                 }
-                $Output | Add-Member -MemberType NoteProperty -Name "WEMApplicationParams" -Value $WEMApplicationParams
+                $Output | Add-Member -MemberType NoteProperty -Name "WEMPrinterParams" -Value $WEMPrinterParams
             }
             "AppVentiX" {
                 $AppVentiXAssignments = @($Assignments | Select-Object Sid, Name, Type, DomainFQDN)
                 $Output | Add-Member -MemberType NoteProperty -Name "AppVentiXAssignments" -Value $AppVentiXAssignments
+                $AppVentiXParams = [PSCustomObject]@{
+                    FriendlyName = $PrinterPath
+                    Description  = $Description
+                    PrinterPath  = $PrinterPath
+                    SetAsDefault = $IsDefault
+                }
+                $Output | Add-Member -MemberType NoteProperty -Name "AppVentiXParams" -Value $AppVentiXParams
             }
         }
-
-        if ($AsJson) {
+        $PrinterGUIDS += $Printer.guid
+        if ($AsJson.IsPresent) {
             $JsonOutput += $Output
         } else {
             Write-Output $Output
         }
     }
-    Write-Progress -Activity "Processing Applications" -Completed
-    Write-Verbose "Processing completed. Processed $TotalNumberOfItems applications."
-    if ($AsJson) {
+
+    Write-Progress -Activity "Processing Printer Mappings" -Completed
+    Write-Verbose "Processing completed. Processed $TotalNumberOfItems printer mappings."
+
+    if ($AsJson.IsPresent -and $JsonOutput.Count -gt 0) {
         Write-Verbose "Converting output to JSON format."
         return ($JsonOutput | ConvertTo-Json -Depth 5)
     }
@@ -276,8 +288,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAWZhal1WPW8An8
-# uObPkUzKBwaV4awxtQ02p9pPG2xYsKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDGVbUm/mYM8BwB
+# GTg+N0eI39HLFCwUfoT8R/Z5q5eEfKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -453,31 +465,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCAIB0wYbFUKn5QpfWcWeHDgp3Y8fc4OFjD6TDIyT7IG
-# 9zANBgkqhkiG9w0BAQEFAASCAYBtZEhFX8norL0ZEZD8TVmuLluuFAJSseJMgWwL
-# i6c/leUfPjABnp9anINFQNDnkHLEOoDRNcev47g0qyINLREGI6nBSvPhcA+Kz4CN
-# o94UmDEtleBSei4X3ioakApeHLddAXKXX8KCp8N61abT9yNAQcJbN19kkw5ZG+hl
-# upgBNLPVR/AMK8bjeXB2kFajV9cw/0bfFS61lJf1M5kJtSaFbF5TWEz3+ceJ3iZU
-# SKYqnjy/0mxNSg2EU0z8AxNisEd8tH9a/Y5eiN5Cljqv7Kc0yh+0DKdMsiBzqKeq
-# yacTg/MKBjtSRpRPReltyJI/IQkC2xMNgbTwFhN+K6R5KHWoJzsWEiYiKioVEhB7
-# Iy/BPhjUSsRIhdXPqTwXxIWMN3q08YYuQZBL1vB2txbAlIz8e9onl9BuGTs1HjLm
-# edLX6fHOFTopSoHoCHoZKZLhmOAINK4+D/6wcoswTXeC7LP4ujt3v9pXYJ3rSc5e
-# OP2c8ObBLYsbOeUxRzP825ro42KhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBY9TQcVM6dBJh8g4MvQgp8m/sUr+k/kRxlLIPSSO3W
+# 8jANBgkqhkiG9w0BAQEFAASCAYBmOfMZo1ce6sjad7fQUDgkZqWYeuRVJRdpdAod
+# BAi4MbEqMwRP0X8rBvMS3p42M3GGGqmk++QBNogSM7zX8kKhtq6giocChgMMaV8N
+# qsFXzU1djIIGKid2RnHGOUcIwEqLGAZgnmn84aIEO7FXacPBjBPkAbdSchymVtH2
+# oONeZ4TCthPg66TxVno+v65sij1oWwE6+IKaXyV6KK/SPD1DSyCAglxjlnjgDQQR
+# dwilBiYCzLGGZwDdxncvovvogT9ieU7PhISPtrzmMC6uMWvBT+bcJCaL1lCLohcx
+# ieYwMYspzZapLLe6KWP2RHfsMsPvgfgRh4TdG8+8W/tiw7aSCdYyDNB3rmhFntsW
+# c/3AV5xS57Lsov70hyY23PKNfvARCwnbshXxC4o09gi3VTal8iP0dg7aC0800scz
+# +7lMCzfM+fHa5DLvsaHrLrWRipTxGzNsERc9BC1kZuUoos0sLPgQvtwwzahOu+kN
+# UOEQ/iwtHhyokw3GIK1eRdR6+AqhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxODU1MzVaMD8GCSqGSIb3
-# DQEJBDEyBDB8VuijwypD2KTYPnBvATrRz24vVzDe5Q0L/x5Q9pAw8/g2mVmiC1aa
-# s7Asz0ooNTwwDQYJKoZIhvcNAQEBBQAEggIABQP7I1XLKAnY4x5wICaHNyK/JIx3
-# r5dXUTcTe+FIaWCRuUPrjKVEfoynSycFbiH485Z8e059tYN4rDYJjfF9E7sOKqqf
-# c3Lx38TaBeaMnDSOFB6HROsjM17Wf3avWH+AlUgNrrPGPuxtJdzxEpIRQmU94mlk
-# vzru9vpvVC+T2QX/JY8Os9bXnJp5hQGCs5ktMqKaQt3HPtkp5fKCi3yjwP/KL/da
-# hN4PA3JEOB8jUquSIKX1pE+tPUYCiNT9cF9mLJ0EEAJ2HLnnmiHolA0lmsNypol6
-# fybsOIgfCeBK8FOb7iZ3/B9sLsa8UJndEDTED88KAhjtKdU//9j0sm+tM493Wmvh
-# wsEJZH8qcGiGDVCo/mWep6IPFIkaI+JKUWgkN2cRQyOL/SieQHGL4Sn6opsLwJB/
-# OCqGPmcun5/MgmCMPkv7i22BJpBaHyzyz+/VjBi2uep1xlb+hsj97QEwZy1uIVfM
-# OVtHBDplJORcQRGPVZ9mJut8w9EDOgdVmmGTTM3/Uc2Hu91aAOlL499+YJHhJVt5
-# /7uVZNSBs9m11m5b1NOe2/rn0Uo30pPQ7/hiEKvcFd3fX1Cp/0+TfvM9l2SmUOyy
-# 44xhGbkB6+r2gq21jIiCrZBT5zscqAxTD9gNWFWF6mmwaUx3en1IsKGGKeWFQsGR
-# 1tPS2z1lZGUcPeE=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxODU1NDFaMD8GCSqGSIb3
+# DQEJBDEyBDBKBSseh6SdNKEBh1BqR524ifU/3AC0AR+NJWlbQlGvgmvm8gdphhca
+# yaE/JN7EpycwDQYJKoZIhvcNAQEBBQAEggIAJhrfnS/ZIPrpGPjj9H58PgRneaHk
+# tZ4O+Tny+09ElA78eq2gbnbMhrdWKE0xeLwJSYb42SxrJFOevFmhiB45xG3ZHWgV
+# Pd1ssMLDhOiGsMeWaPwx0DXK09EyyHrzzldRmuiwWWgdGYJnO11avZhwCVLl8idn
+# BiSR/saX1ZWMb49Qvml/FFHo4op1qbh1VooUEGQ1fjJyjqCtQcnF4gRggnm7X8wI
+# Sk3X6k7rY7xW1KEVm8RnJFlflT+KaLE5ln6nQYWk1Fj2ghKXwz2T3yDuybNxN0/n
+# DNVkwwf2YbWGMkyErW9qbIH6/EujrnICN4hrVcHFqy+UwZUhCJ9yO61UCxb4zOd7
+# 6TdfgRMtisMkSWbn1fraRK3kwrjTk1fPWYthb/XfX46oOMraUBW+VgVZE5SfgAoB
+# 1IV8BcZqH4K5rrPy0rnAsxCvLt/hveLeTYuIZuYcJnYGgrhSo4K4c7cZEwraH7hZ
+# F07+/xowSDAUBFuG9cvxJIPIDMgJTD1VUGH40lcw+aqhrzcbVMXm/lsgWFRGiSqP
+# nK6tMRoIkZAiBvk7dhb4Vh9/IobVq+QZrFwh7LSOz27hqpaELxDMJaIatP4dOC1l
+# XEr4KtR5YS/3jXOETm2Y2lAjM/SpbozvC1ouaChIfEbV1dFP/XE2kwO7HXYjyM3R
+# eydoV4iSlYvKuxc=
 # SIG # End signature block

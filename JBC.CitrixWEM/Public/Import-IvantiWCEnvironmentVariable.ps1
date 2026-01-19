@@ -1,102 +1,140 @@
-[CmdletBinding()]
-param(
-    [Parameter(Mandatory = $false)]
-    [string]$remoteBranch = 'main',
+﻿function Import-IvantiWCEnvironmentVariable {
+    [CmdletBinding(SupportsShouldProcess)]
+    param (
+        [Parameter(
+            Mandatory = $true,
+            HelpMessage = "Path to the Ivanti Workspace Control XML configuration file."
+        )]
+        [Parameter(ParameterSetName = 'BuildingBlock')]
+        [ValidateScript({ Test-Path $_ -PathType Leaf })]
+        [string]$XmlFilePath,
 
-    [Parameter(Mandatory = $false)]
-    $uri = 'https://github.com/j81blog/JBC.CitrixWEM/archive',
+        [Parameter(
+            Mandatory = $false,
+            HelpMessage = "Domain FQDN to append to non-FQDN SMB paths."
+        )]
+        [string]$DomainFqdn = ${Env:USERDNSDOMAIN},
 
-    [Parameter(Mandatory = $false)]
-    [String]$ModuleName = 'JBC.CitrixWEM'
-)
-
-#Requires -Version 5.1
-
-if ($PSVersionTable.PSEdition -eq 'Desktop') {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'WindowsPowerShell\Modules')
-} elseif ($IsWindows) {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'PowerShell\Modules')
-} else {
-    $InstallPath = [System.IO.Path]::Combine($env:HOME, '.local/share/powershell/Modules')
-}
-
-$ExecutionPolicy = Get-ExecutionPolicy
-if (('PSEdition' -notin $PSVersionTable.Keys -or $PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) -and ($ExecutionPolicy -notin 'Unrestricted', 'RemoteSigned', 'Bypass')) {
-    Write-Host "Setting process execution policy to RemoteSigned" -ForegroundColor Cyan
-    Set-ExecutionPolicy RemoteSigned -Scope Process -Force
-} else {
-    Write-Host "Current execution policy: $ExecutionPolicy" -ForegroundColor Yellow
-}
-
-if (-not (Test-Path -Path $InstallPath)) {
-    Write-Host "Creating module path: $InstallPath" -ForegroundColor Cyan
-    New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
-}
-
-if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
-
-    # GitHub now requires TLS 1.2
-    # https://blog.github.com/2018-02-23-weak-cryptographic-standards-removed/
-    $CurrentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__, [Net.SecurityProtocolType]::Tls.value__)
-    $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $CurrentMaxTls }
-    $newTlsTypes | ForEach-Object {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
+        [Parameter(Mandatory = $true)]
+        [int]$ConfigurationSiteID
+    )
+    if ($script:WemApiConnection.IsConnected -ne $true) {
+        throw "Not connected to WEM API. Please run Connect-WEMApi first."
     }
-
-
-    $Url = "{0}/{1}.zip" -f $Uri.TrimEnd('/'), $RemoteBranch
-    Write-Host "Downloading latest version of $ModuleName from $Url" -ForegroundColor Cyan
-    $File = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), "$ModuleName.zip")
-    $webclient = New-Object System.Net.WebClient
-    try {
-        $webclient.DownloadFile($Url, $File)
-    } catch {
-        Write-Host "Failed to download the file from $Url, Error $($_.Exception.Message)" -ForegroundColor Red
-        throw $_
+    $Params = @{
+        XmlFilePath = $XmlFilePath
+        ExportFor   = "WEM"
     }
-    Write-Host "File saved to $File" -ForegroundColor Green
-
-    $TempPath = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), [guid]::NewGuid().ToString())
-    Write-Host "Expanding $ModuleName.zip to $($TempPath)" -ForegroundColor Cyan
-    if (Test-Path -Path $TempPath) {
-        Remove-Item -Path $TempPath -Recurse -Force -ErrorAction Continue
+    if ($PSBoundParameters.ContainsKey('DomainFqdn')) {
+        $Params.DomainFqdn = $DomainFqdn
     }
-    New-Item -ItemType Directory -Force -Path $TempPath | Out-Null
-    Expand-Archive -Path $File -DestinationPath $TempPath -Force
-
-    #Extract module version from module manifest
-    $ModuleManifest = Get-ChildItem -Path $TempPath -Filter "$ModuleName*.psd1" -Recurse | Select-Object -First 1
-    if ($null -eq $ModuleManifest) {
-        Write-Host "Module manifest not found in $($TempPath)" -ForegroundColor Red
-        throw "Module manifest not found"
+    if (Get-WEMConfigurationSite | Where-Object { $_.id -eq $ConfigurationSiteID }) {
+        Set-WEMActiveConfigurationSite -Id $ConfigurationSiteID
     } else {
-        $ModuleInfo = Import-PowerShellDataFile -Path $ModuleManifest.FullName
-        $ModuleVersion = $ModuleInfo.ModuleVersion
-        Write-Host "Module version: $($ModuleVersion)" -ForegroundColor Green
+        throw "Configuration Site with ID $ConfigurationSiteID could not be found."
     }
+    $itemsToProcess = @(Get-IvantiWCEnvironmentVariable @Params)
+    Write-Host "We got $($itemsToProcess.count) environment variables"
+    foreach ( $Item in $itemsToProcess ) {
+        if ($Item.Success -and $Item.Success -eq $true) {
+            continue
+        }
+        $Params = $Item.WEMEnvironmentVariableParams | ConvertTo-Hashtable
+        $Forest = (Get-WEMActiveDomain).Forest
+        $Domain = (Get-WEMActiveDomain).Domain
+        if (-not ($Item.Enabled -eq $true)) {
+            Write-Host "Skipping Environment Variable, Environment Variable entry `"$($Item.Name)`" is not enabled" -ForegroundColor Yellow
+            continue
+        }
 
-    if (Test-Path -Path "$($InstallPath)\$($ModuleName)") {
-        Write-Host "Removing any old copy" -ForegroundColor Cyan
-        Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Continue
+        if (-not $Forest -or -not $Domain) {
+            Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
+            return
+        }
+        try {
+            Write-Verbose "Creating new WEM environment variable $($Item.Name)"
+            try {
+                $WEMEnvironmentVariable = New-WEMEnvironmentVariable @Params -PassThru
+                Write-Host "Successfully created the environment variable `"$($Item.Name)`"" -ForegroundColor Green
+            } catch {
+                Write-Host "Error creating WEM environment variable $($Item.Name), Error $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
+                Write-Host "Script Name: $($_.InvocationInfo.ScriptName)" -ForegroundColor Red
+                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+                continue
+            }
+            # Check if Environment Variable was created
+            if (-not $WEMEnvironmentVariable) {
+                Write-Error "Environment Variable $($Item.Name) not found in WEM"
+                return
+            } else {
+                Write-Host "WEM environment variable $($WEMEnvironmentVariable.Name) with value $($WEMEnvironmentVariable.VariableValue) created successfully." -ForegroundColor Green
+            }
+
+            foreach ($WEMAssignment in $Item.WEMAssignments) {
+                if ($WEMAssignment.Name -like "*\*") {
+                    $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
+                } else {
+                    $ADObjectName = $WEMAssignment.Name
+                }
+                $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $Domain, $ADObjectName
+                $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
+                if (-not $WEMAssignmentTarget) {
+                    # Find the group or user in Active Directory using the WEM cmdlets
+                    # The Where-Object ensures an exact match on the account name
+                    if ($WEMAssignment.Type -ieq "user") {
+                        $ADObject = Get-WEMADUser -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                        if ([String]::IsNullOrEmpty($ADObject)) {
+                            Write-Host "Could not find user with name `"$($ADObjectName)`""
+                            Write-Warning "Known issue, we are looking at this issue"
+                            continue
+                        }
+                    } else {
+                        $ADObject = Get-WEMADGroup -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                        if ([String]::IsNullOrEmpty($ADObject)) {
+                            <# There seems to be a bug with long group names#>
+                            $MaxLength = "$($ADObjectName)".Length
+                            if ($MaxLength -gt 23) {
+                                $MaxLength = 23
+                            }
+                            $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
+                            $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                        }
+                        if ([String]::IsNullOrEmpty($ADObject)) {
+                            Write-Host "Could not find group with name `"$($ADObjectName)`""
+                            continue
+                        }
+                    }
+                    # Create a new assignment target in WEM using the AD group's properties
+                    # The -PassThru parameter outputs the newly created object to the pipeline
+                    $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
+                    Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
+                } else {
+                    Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
+                }
+                # Assign the environment variable to the target group
+                $WEMAssignmentParams = $Item.WEMAssignmentParams | ConvertTo-Hashtable
+                $WEMEnvironmentVariableAssignment = New-WEMEnvironmentVariableAssignment -Target $WEMAssignmentTarget -EnvironmentVariable $WEMEnvironmentVariable -PassThru @WEMAssignmentParams
+                if ($WEMEnvironmentVariableAssignment) {
+                    Write-Host "Successfully created WEM environment variable assignment for $($WEMAssignment.Name)" -ForegroundColor Green
+                } else {
+                    Write-Error "Failed to create WEM environment variable assignment for $($WEMAssignment.Name)"
+                }
+            }
+            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force
+        } catch {
+            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+            Write-Host "Error creating WEM environment variable $($Item.Name), ErrorDetails`r`n $(Get-ExceptionDetails -ErrorRecord $_ -AsPlainText)" -ForegroundColor Red
+            continue
+        }
     }
-    Write-Host "Moving new module to $InstallPath" -ForegroundColor Cyan
-    Move-Item -Path "$($TempPath)\$($ModuleName)-$($RemoteBranch)\$($ModuleName)" -Destination $InstallPath -Force -ErrorAction Continue
-    Remove-Item -Path "$($TempPath)" -Recurse -Force
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
-} else {
-    Write-Host "Running locally from $($PSScriptRoot)" -ForegroundColor Cyan
-    Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Ignore
-    Remove-Item -Path "$File*" -Force -ErrorAction Ignore
-    Copy-Item -Path "$($PSScriptRoot)\$($ModuleName)" -Destination $InstallPath -Recurse -Force -ErrorAction Continue
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
 }
-Write-Host "Module has been installed, to import run `"Import-Module -Name $ModuleName -Force`"" -ForegroundColor Green
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAg0MU/5oI3/zl4
-# JyoyiLFcM+j1RW6lvL9WOF/tBKlRhaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBDVnFYb/calTsm
+# GnnbJ1AVidsghQu/8dwKtIQ3gyB0V6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -272,31 +310,31 @@ Write-Host "Module has been installed, to import run `"Import-Module -Name $Modu
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCB5UUOel2YULeIJ26wyJAooI7+VF/Hw0dy844VRMhZh
-# JTANBgkqhkiG9w0BAQEFAASCAYDEZqZoKp29Sbu8T0jOFIaCIJCXVoH18VlegnzS
-# a+8bWPgrxbhcZnXz0JtlqOIVeNTJvK6eyIEhr+2hxt36fnRKZUs5eRg22A/Mnp/3
-# Yi/03SxNGN3UzDPOFFoH5XVuAzHWAnCg2xugJ/kehyCHoU+qyqC7jnRJc+eWQaiy
-# jtCv6gUfaTrVFC9rMWAy8UnS2NYcJhnT1zErpfXq83Nf2QqX9hyJI95Rd8QhkiwL
-# j2da7oYMDHbE8OakinyOmSo+v1tp6vp1+MBVHgOyS85ReiAEdU2bwq/q4NiSmIiX
-# 1qXplyvMZze3mj7ra9WMzhg3odNSZB4ZKSKMy3JgJ/4eeKmRjynF8oSkEcX2mxuC
-# AtIWajf8q9115of2v5RbLcpfCJ34aFfdiswPmA1vlw8/9/PILi1ophB2QBv75zRk
-# cnCDNlv//ALpubyhEp3a4d4FqOjJyv9vJzCJWtuBJbiVCwR4iu9SRQC9V92oulzM
-# BiGNGx/dNKp9P5Rt3ouTMXrIaX+hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCAyEiwT4uG3k1AGJS35TgxqUEsu3yRD2jzOn+tY+1hr
+# oDANBgkqhkiG9w0BAQEFAASCAYCsYUfRI+h4aQLXMaAQpext4zd1U4h2FbVSNkf0
+# akfyndKFBzOHTuzbEQ1evt/Ix+HZrxiwYU/e217bmMxymshNeSjMUJdgWP+3iy53
+# Bfcrms6QoKT/YvAO6NME5a1UJf4OqOxYgJVNCB/wmvh/kT+JkAvQFabErDux2F6a
+# /VJqEop1+Yd0EPGZlLsYBajqU+GKKPGdgm7GRdTs/9eRAmBSQrwLAeeSwCJ7vBZU
+# 51cNh7bxZUwVwuD3G6dZx/Y0ZjRAIWP5fP/v9I+UNeV2+BBKxFCUWfOJSNKWX7Vk
+# K6v5nE8FUO/2cONpxN6Q6N9J0R5xSJRzds5r4NvjXYwkn4y8x1V97BulrRsm0CmI
+# Zxt54XRgGpySLX2btb8vxBZBSNvP0rFAuoYMVHtajIj9rYWQ42XXi6+B8gEQ4sSL
+# 5wsSY+CLIJ6Yd2aGyTAPuDbmjfS1PyvyQUD8nGsfPG9SyRacMRkDj2nrb6hjjLVI
+# 981bT6iIcir+O5Nh8kDUgUyRAFehggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTIxODU1MDlaMD8GCSqGSIb3
-# DQEJBDEyBDDmY+xy3Q1wxDtzx75CDV6msESgT8C/FQ9RNEptWycR0FQYbd1bOljM
-# /QjonFwqwYIwDQYJKoZIhvcNAQEBBQAEggIAem7wk7Cny4VuPS00iUOtxHlMMUt0
-# bSN1vvz5m44W2LsXnwglFT/ZnPGcWl5DKyrowPKDWQJ0+N0x/5H60qo3/gix/+ha
-# EI+jax9Rluw1Bi9+WO/XTpj4Z1UU/sYLkSnCJMQcOtw9LVOWc6153v5butmLSsGC
-# sRXtMhf0f4OFSkzZFfCMc2Mo7LgS3hTjVLxteb+0iwqjGOLWB/gi6ItsjtLN3AoR
-# U/7fUJnCPceah2DRtVdimT3WtFzk2jG3nuShGwNg+uUwuuGaghFDGMBySsjd7WSC
-# R9KcUQjDMSuvpfYSovX4JmLcYldgcCQDx00NPvaEpBsqv6TusfRimjhl+FdIIno9
-# GnxWFQML4iv4sOvxdJX0dp372f1z5EsQDCais+c1nExv1Zrw1yQqApXxPvn1OnpF
-# Rwf3CijcxkK5EFAfngv8V5mueocqJB/lAavulfS8eHwKKZL+b4t2ATrSToH9Y39O
-# NbeCN95PAFUpvXbT7LWB5gB0TeRmyuXtpKNdgfI2ztQmLp0fFPTb0nEHGVMwiU8q
-# jlI07Kncnw33k9prt/6juAWEtT0acu7+jfc20SE07My1rvSd1ygdn/VE1A6LAtqL
-# 3NikWgL/hcU0YvsVM+7unR1l9GSFBpWVg6SCQ/9UPOD9vM2mSove042X77KwttT8
-# azkDBjDmDCEnOK0=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgyMDAwMjdaMD8GCSqGSIb3
+# DQEJBDEyBDBb/sdCplJJlM0TSvjnqsAonoLb1ARAGiyp/L/a+gKtuxvpreBxZmLp
+# tiZR7bYghq4wDQYJKoZIhvcNAQEBBQAEggIANX9mGdG6zhbwoxunI9fDmy+r0QJ6
+# KxwuzotRzD1W0fym+sJ6/pMVK1JPGO+EhochA5AKZ5j/y4q9qosjxfwC2FKahicv
+# eKkPkG2K0wTe2pP8Ksp4UQC6MtrFAJ4OL0khy+zICDglwQm4wQeiEIrpzXHxjrhH
+# 2lyxYu9Ux92OaEahYpiyQZskr5+LoibRwRXy3SLk65XatpX7Mo4gpEZnC5GdDK+K
+# W6Fj6jOunawHqwfbAT3W+2FBmBrV2aap+hLm5Sl0ckxAta+DlcEqKYw4sseZtZE5
+# 8Y3IPSpJ27Qorq7WQjXwEiOnT0lNf/MpTda3CADQ8vuBj1DoBxKwDiWlGbgNWGBB
+# 1uvB//IvRkEX8njffPxSsEdZa9gvdbR+VUmaGxVEIkvE+q3BSWgPh8Au/1GruQAt
+# hbvlJ34eMVLNMAHfXQ/EApMDvwkkz7BMXzHFxQllOObIb7uTMN3ttU3TvKM2MMDF
+# vF7NpLtBWb00lM7jPGFhwZNWkNWPm05RutpcJHa0oFOvpLDQP75oPSJPtNRdX8Rz
+# 1Ug62pbWt8MRiVUshj4y/wQQNmH0IjQ0AzqqC44lJfCvF+nLoSSgC03Te5lpdx84
+# xCc4cngLbHEBhKIr9+yl0HacRC/dUJQjutWaDTDZ2Oy088gCXL97Rc9S0si1HGL1
+# t29vOoanMlNA7gc=
 # SIG # End signature block

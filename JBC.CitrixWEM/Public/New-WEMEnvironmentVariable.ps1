@@ -1,102 +1,109 @@
-[CmdletBinding()]
-param(
-    [Parameter(Mandatory = $false)]
-    [string]$remoteBranch = 'main',
+﻿function New-WEMEnvironmentVariable {
+    <#
+    .SYNOPSIS
+        Creates a new environment variable action in a WEM Configuration Set.
+    .DESCRIPTION
+        This function adds a new environment variable action. If -SiteId is not specified, it uses
+        the active Configuration Set defined by Set-WEMActiveConfigurationSite.
+    .PARAMETER Name
+        The display name for the environment variable action (e.g., "MyEnvVar").
+    .PARAMETER VariableName
+        The actual environment variable name that will be set (e.g., "MY_VAR").
+    .PARAMETER VariableValue
+        The value to assign to the environment variable.
+    .PARAMETER Description
+        An optional description for the environment variable action.
+    .PARAMETER SiteId
+        The ID of the WEM Configuration Set. Defaults to the active site.
+    .PARAMETER Enabled
+        Whether the action is enabled. Defaults to $true.
+    .PARAMETER ExecutionOrder
+        The order in which this action is executed. Defaults to 0.
+    .PARAMETER PassThru
+        If specified, the command returns the newly created environment variable object.
+    .NOTES
+        Version:        1.0
+        Author:         John Billekens Consultancy
+        Creation Date:  2026-01-18
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([PSCustomObject])]
+    param(
+        [Parameter(Mandatory = $false)]
+        [int]$SiteId,
 
-    [Parameter(Mandatory = $false)]
-    $uri = 'https://github.com/j81blog/JBC.CitrixWEM/archive',
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
 
-    [Parameter(Mandatory = $false)]
-    [String]$ModuleName = 'JBC.CitrixWEM'
-)
+        [Parameter(Mandatory = $true)]
+        [string]$VariableName,
 
-#Requires -Version 5.1
+        [Parameter(Mandatory = $true)]
+        [string]$VariableValue,
 
-if ($PSVersionTable.PSEdition -eq 'Desktop') {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'WindowsPowerShell\Modules')
-} elseif ($IsWindows) {
-    $InstallPath = [System.IO.Path]::Combine(([Environment]::GetFolderPath('MyDocuments')), 'PowerShell\Modules')
-} else {
-    $InstallPath = [System.IO.Path]::Combine($env:HOME, '.local/share/powershell/Modules')
-}
+        [Parameter(Mandatory = $false)]
+        [string]$Description,
 
-$ExecutionPolicy = Get-ExecutionPolicy
-if (('PSEdition' -notin $PSVersionTable.Keys -or $PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) -and ($ExecutionPolicy -notin 'Unrestricted', 'RemoteSigned', 'Bypass')) {
-    Write-Host "Setting process execution policy to RemoteSigned" -ForegroundColor Cyan
-    Set-ExecutionPolicy RemoteSigned -Scope Process -Force
-} else {
-    Write-Host "Current execution policy: $ExecutionPolicy" -ForegroundColor Yellow
-}
+        [Parameter(Mandatory = $false)]
+        [bool]$Enabled = $true,
 
-if (-not (Test-Path -Path $InstallPath)) {
-    Write-Host "Creating module path: $InstallPath" -ForegroundColor Cyan
-    New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
-}
+        [Parameter(Mandatory = $false)]
+        [int]$ExecutionOrder = 0,
 
-if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
+        [Parameter(Mandatory = $false)]
+        [switch]$PassThru
+    )
 
-    # GitHub now requires TLS 1.2
-    # https://blog.github.com/2018-02-23-weak-cryptographic-standards-removed/
-    $CurrentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__, [Net.SecurityProtocolType]::Tls.value__)
-    $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $CurrentMaxTls }
-    $newTlsTypes | ForEach-Object {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
-    }
-
-
-    $Url = "{0}/{1}.zip" -f $Uri.TrimEnd('/'), $RemoteBranch
-    Write-Host "Downloading latest version of $ModuleName from $Url" -ForegroundColor Cyan
-    $File = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), "$ModuleName.zip")
-    $webclient = New-Object System.Net.WebClient
     try {
-        $webclient.DownloadFile($Url, $File)
+        # Get connection details. Throws an error if not connected.
+        $Connection = Get-WemApiConnection
+
+        $ResolvedSiteId = 0
+        if ($PSBoundParameters.ContainsKey('SiteId')) {
+            $ResolvedSiteId = $SiteId
+        } elseif ($Connection.ActiveSiteId) {
+            $ResolvedSiteId = $Connection.ActiveSiteId
+            Write-Verbose "Using active Configuration Set '$($Connection.ActiveSiteName)' (ID: $ResolvedSiteId)"
+        } else {
+            throw "No -SiteId was provided, and no active Configuration Set has been set. Please use Set-WEMActiveConfigurationSite or specify the -SiteId parameter."
+        }
+
+        if ($PSCmdlet.ShouldProcess($VariableName, "Create WEM Environment Variable '$($Name)' in Site ID '$($ResolvedSiteId)'")) {
+            $Body = @{
+                siteId         = $ResolvedSiteId
+                enabled        = $Enabled
+                actionType     = "CreateSetEnvironmentVariable"
+                executionOrder = $ExecutionOrder
+                name           = $Name
+                variableName   = $VariableName
+                variableValue  = $VariableValue
+            }
+            if ($PSBoundParameters.ContainsKey('Description')) {
+                $Body.Add('description', $Description)
+            }
+
+            $UriPath = "services/wem/action/environmentVariable"
+            $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
+
+            if ($PassThru.IsPresent) {
+                Write-Verbose "PassThru specified, retrieving newly created environment variable..."
+                # Use the unique Name property for a reliable lookup.
+                $Result = Get-WEMEnvironmentVariable -SiteId $ResolvedSiteId | Where-Object { $_.Name -ieq $Name }
+            }
+
+            Write-Output ($Result | Expand-WEMResult -ErrorAction SilentlyContinue)
+        }
     } catch {
-        Write-Host "Failed to download the file from $Url, Error $($_.Exception.Message)" -ForegroundColor Red
-        throw $_
+        Write-Error "Failed to create WEM Environment Variable '$($VariableName)': $($_.Exception.Message)"
+        return $null
     }
-    Write-Host "File saved to $File" -ForegroundColor Green
-
-    $TempPath = [System.IO.Path]::Combine([system.io.path]::GetTempPath(), [guid]::NewGuid().ToString())
-    Write-Host "Expanding $ModuleName.zip to $($TempPath)" -ForegroundColor Cyan
-    if (Test-Path -Path $TempPath) {
-        Remove-Item -Path $TempPath -Recurse -Force -ErrorAction Continue
-    }
-    New-Item -ItemType Directory -Force -Path $TempPath | Out-Null
-    Expand-Archive -Path $File -DestinationPath $TempPath -Force
-
-    #Extract module version from module manifest
-    $ModuleManifest = Get-ChildItem -Path $TempPath -Filter "$ModuleName*.psd1" -Recurse | Select-Object -First 1
-    if ($null -eq $ModuleManifest) {
-        Write-Host "Module manifest not found in $($TempPath)" -ForegroundColor Red
-        throw "Module manifest not found"
-    } else {
-        $ModuleInfo = Import-PowerShellDataFile -Path $ModuleManifest.FullName
-        $ModuleVersion = $ModuleInfo.ModuleVersion
-        Write-Host "Module version: $($ModuleVersion)" -ForegroundColor Green
-    }
-
-    if (Test-Path -Path "$($InstallPath)\$($ModuleName)") {
-        Write-Host "Removing any old copy" -ForegroundColor Cyan
-        Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Continue
-    }
-    Write-Host "Moving new module to $InstallPath" -ForegroundColor Cyan
-    Move-Item -Path "$($TempPath)\$($ModuleName)-$($RemoteBranch)\$($ModuleName)" -Destination $InstallPath -Force -ErrorAction Continue
-    Remove-Item -Path "$($TempPath)" -Recurse -Force
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
-} else {
-    Write-Host "Running locally from $($PSScriptRoot)" -ForegroundColor Cyan
-    Remove-Item -Path "$($InstallPath)\$($ModuleName)" -Recurse -Force -ErrorAction Ignore
-    Remove-Item -Path "$File*" -Force -ErrorAction Ignore
-    Copy-Item -Path "$($PSScriptRoot)\$($ModuleName)" -Destination $InstallPath -Recurse -Force -ErrorAction Continue
-    Write-Host "Importing module from local path, force reloading" -ForegroundColor Cyan
 }
-Write-Host "Module has been installed, to import run `"Import-Module -Name $ModuleName -Force`"" -ForegroundColor Green
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAg0MU/5oI3/zl4
-# JyoyiLFcM+j1RW6lvL9WOF/tBKlRhaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCDxWR+q6vtVVMt
+# SMPHSGkxI1Le25/MlX5qtzzrjVrMyqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -272,31 +279,31 @@ Write-Host "Module has been installed, to import run `"Import-Module -Name $Modu
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCB5UUOel2YULeIJ26wyJAooI7+VF/Hw0dy844VRMhZh
-# JTANBgkqhkiG9w0BAQEFAASCAYDEZqZoKp29Sbu8T0jOFIaCIJCXVoH18VlegnzS
-# a+8bWPgrxbhcZnXz0JtlqOIVeNTJvK6eyIEhr+2hxt36fnRKZUs5eRg22A/Mnp/3
-# Yi/03SxNGN3UzDPOFFoH5XVuAzHWAnCg2xugJ/kehyCHoU+qyqC7jnRJc+eWQaiy
-# jtCv6gUfaTrVFC9rMWAy8UnS2NYcJhnT1zErpfXq83Nf2QqX9hyJI95Rd8QhkiwL
-# j2da7oYMDHbE8OakinyOmSo+v1tp6vp1+MBVHgOyS85ReiAEdU2bwq/q4NiSmIiX
-# 1qXplyvMZze3mj7ra9WMzhg3odNSZB4ZKSKMy3JgJ/4eeKmRjynF8oSkEcX2mxuC
-# AtIWajf8q9115of2v5RbLcpfCJ34aFfdiswPmA1vlw8/9/PILi1ophB2QBv75zRk
-# cnCDNlv//ALpubyhEp3a4d4FqOjJyv9vJzCJWtuBJbiVCwR4iu9SRQC9V92oulzM
-# BiGNGx/dNKp9P5Rt3ouTMXrIaX+hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBNO6tRfTQQdHJNRzpXUhUmc3NYW83CZW6TCo03QoW4
+# MjANBgkqhkiG9w0BAQEFAASCAYCae7ontukWqiFy6rzyDkDmmWP8PqY1XUnPf+Sb
+# 2ytArmCFamDC0EpvYO1M4T+Z88/bIdabjyvbRHI5iWGFih+BIl89Fum1l/hyYtO/
+# 1qsmKGQjUu4S5YyuU+9EW+NbzVxX+Gh3afZEi9zk6g5QSl5kyYqT72yGOgS/cvX3
+# ZGwEGGj8R0lYBW+fixI/bQmiWxPtPg7JaX79HRR72wDopLsjLvBgIC4O77upB5Zn
+# +yeElh0MWWHxyYg0RbmEu0cwRFeqpXiaCv7W9JZc9Qjin+HXdCmBPiVFtm2gOjqA
+# orKSpExM7RpFNwfDdJnXQ+HFlL4cDvkrgOv3vmKZHJZ/RwCuy3Nmc/e4kyfr8R4P
+# qzF/C6Mo+8j8oS3GsPnjChgg2NHhSjAPTuHIpsjxVOiHJQlGxLhd3lU5t1vp7MvX
+# TqSDzGbhTCJOV24oXohJGEHu+ERq25n/OH4lILVmSIkbIFZ83rBYguZMD2fW8SMH
+# 5LoXU6YnxjdwL+RP7ETzXPHHvqehggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTIxODU1MDlaMD8GCSqGSIb3
-# DQEJBDEyBDDmY+xy3Q1wxDtzx75CDV6msESgT8C/FQ9RNEptWycR0FQYbd1bOljM
-# /QjonFwqwYIwDQYJKoZIhvcNAQEBBQAEggIAem7wk7Cny4VuPS00iUOtxHlMMUt0
-# bSN1vvz5m44W2LsXnwglFT/ZnPGcWl5DKyrowPKDWQJ0+N0x/5H60qo3/gix/+ha
-# EI+jax9Rluw1Bi9+WO/XTpj4Z1UU/sYLkSnCJMQcOtw9LVOWc6153v5butmLSsGC
-# sRXtMhf0f4OFSkzZFfCMc2Mo7LgS3hTjVLxteb+0iwqjGOLWB/gi6ItsjtLN3AoR
-# U/7fUJnCPceah2DRtVdimT3WtFzk2jG3nuShGwNg+uUwuuGaghFDGMBySsjd7WSC
-# R9KcUQjDMSuvpfYSovX4JmLcYldgcCQDx00NPvaEpBsqv6TusfRimjhl+FdIIno9
-# GnxWFQML4iv4sOvxdJX0dp372f1z5EsQDCais+c1nExv1Zrw1yQqApXxPvn1OnpF
-# Rwf3CijcxkK5EFAfngv8V5mueocqJB/lAavulfS8eHwKKZL+b4t2ATrSToH9Y39O
-# NbeCN95PAFUpvXbT7LWB5gB0TeRmyuXtpKNdgfI2ztQmLp0fFPTb0nEHGVMwiU8q
-# jlI07Kncnw33k9prt/6juAWEtT0acu7+jfc20SE07My1rvSd1ygdn/VE1A6LAtqL
-# 3NikWgL/hcU0YvsVM+7unR1l9GSFBpWVg6SCQ/9UPOD9vM2mSove042X77KwttT8
-# azkDBjDmDCEnOK0=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxOTQ0NTJaMD8GCSqGSIb3
+# DQEJBDEyBDBp0qbmkFtJfvKDQf9WVrvrACPlWPnnFlf9I2gWHAUtK2HO6gGHv1ce
+# 8ZpCX7NfTNEwDQYJKoZIhvcNAQEBBQAEggIAgzm37wn1uTbm+GICFpkZAmHjE6by
+# wT9Gb+qpFs+U+mS81IIs7Oo3MDE99PioODu66m7AtIkD+orbS/8S8iw2sbeCGiec
+# ZdqPD2LT/jNqsmrVplLL/FhuDv8x7RuJKLGnRl0JxNVw7CkRMIai0JBwNTBqZ2JP
+# jXSgko6v09wh0gNbGcaauvVaiwyxMMJvAASuAp1KuL4U0lZ5DwjX5jz/cwEhLQcB
+# +BfV2Bj9+RxVp7J10/yBtg3PHU/RRhFeEoMH/Z5tP3y3KqzGzl6UlITsceO1cFpl
+# CoS29GdffTLmaIAACQ6LQc7hio6cz71BHqGWRO3nR/ySTPA+Qzdct0zlGExWrIda
+# gJaafYmK5n3dSByncXs1YbO/MQCnCkGuUH+FQE+5Y+ttFX1RjmwlgoOFY2yX0/sR
+# BOyGjWWTaeB7w4TrQDrxbY7fpu3K344vBpsoRtOdYR7TrTtDCyn13Wnx7EewlD71
+# V7/ICrnKwkALgnINsC7MhoWOO7H9jfZZH3EcnZ4HsXtF9oOPl5uOZqo64O24AH49
+# naLodwszDDS5HZEDmMdqNTclIbSF2cl5MB3wnOpc584+pOn3fC5EdMoDBgR0LiwC
+# GDTD6CE730+05yWn6gVWtg66u7+BFP//3tQYWSJBwOB1yqJS4I94+kVSiqCKpgXQ
+# yM2QV4/NbMEVtK4=
 # SIG # End signature block
