@@ -76,10 +76,36 @@
         [Parameter(Mandatory = $false, ParameterSetName = 'OnPremCredential')]
         [switch]$PassThru,
 
+        [switch]$IgnoreCertificateErrors,
+
         [Parameter(Mandatory = $true, ParameterSetName = 'OnPremCredential')]
         [System.Management.Automation.PSCredential]
         [System.Management.Automation.Credential()]$Credential = [System.Management.Automation.PSCredential]::Empty
     )
+
+    if ($IgnoreCertificateErrors.IsPresent) {
+        if ('PSEdition' -notin $PSVersionTable.Keys -or $PSVersionTable.PSEdition -eq 'Desktop') {
+            if (-not ("TrustAllCertsPolicy" -as [type])) {
+                Add-Type -TypeDefinition @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class TrustAllCertsPolicy : ICertificatePolicy {
+    public bool CheckValidationResult(
+    ServicePoint srvPoint, X509Certificate certificate,
+    WebRequest request, int certificateProblem) {
+        return true;
+    }
+}
+"@
+            }
+            [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+        }
+        $currentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__, [Net.SecurityProtocolType]::Tls.value__)
+        $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $currentMaxTls }
+        $newTlsTypes | ForEach-Object {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
+        }
+    }
 
     $LocalConnection = [PSCustomObject]@{
         IsOnPrem     = $false
