@@ -61,13 +61,9 @@ $apps | ConvertTo-Json -Depth 10 | Set-Content -Path $filename -Encoding UTF8 -F
 
 If you already have added the shortcuts earlier and just want to update the shortcut icons, you can run the following code.
 
+To connect, follow this guide [Connecting to WEM](ConnectToWEMEnvironment.md)
+
 ```PowerShell
-Import-Module JBC.CitrixWEM -Force
-
-Connect-WEMApi [-WEMServer "<https://YourWEMServer.fqdn>" -Credential WEM Credential>]
-Get-WEMConfigurationSite | Format-Table -AutoSize
-Set-WEMActiveConfigurationSite -Id "<YourSiteID>"
-
 $filename = "C:\path\to\apps.json"
 $apps = Get-Content $filename -Raw | ConvertFrom-Json
 foreach ($app in $apps) {
@@ -86,6 +82,4 @@ foreach ($app in $apps) {
         Write-Host "Application `"$($app.Name)`" not found in WEM. Skipping... (GPO Action: $($app.Action))"
     }
 }
-
-Disconnect-WEMApi
 ```
