@@ -1,5 +1,12 @@
 ﻿#Requires -Version 5.1
 
+Write-Host ""
+Write-Warning "**************************************************************************************************************"
+Write-Warning "*                                This module is still in active development.                                 *"
+Write-Warning "*                      Please test thoroughly before using in production environments!                       *"
+Write-Warning "**************************************************************************************************************"
+Write-Host ""
+
 # Define paths to public and private functions in a more robust way
 $PublicPath = Join-Path -Path $PSScriptRoot -ChildPath 'Public'
 $PrivatePath = Join-Path -Path $PSScriptRoot -ChildPath 'Private'
@@ -58,8 +65,8 @@ if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCALlImx/64mvBP1
-# qa74IQwpLCErPC4n8y44UrwnACMUeqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAG7hfWCiT/yunv
+# iSA/nueXiMqn7i3KKGlppsEl3PUdQ6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -235,31 +242,31 @@ if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCA+UfvOBMdQUMGqSiT+pzUKw8v5fssPId6oLU++oYV9
-# bzANBgkqhkiG9w0BAQEFAASCAYCWJ30rnIp9RzejEp9TQR+2djqheOzkIbz7fpv4
-# H1H9MFz5vjGA1Pgp2Acx+aLMn0sm96RAKHTh7SkdYEHpoogRN8k8dS9x+ctNWLzC
-# rAZHraprNma0dEbW3kwENUJbzVmfNgvtxT52/TvBlSu6fjGaSzRpVh0IGBa7oHay
-# wJI5ufRVUxEDhay7//HHky/nMYT2Nh53k1o7yvN3KYibZe+nFZiRVkMM+u7twtsG
-# 74wRVdnmwIEZx/P3U1ZTxNS/zJm6aHdCnWPSoTRhy6TlRVv97QiVU6RBVGgLmmbw
-# e18djjM2U3sSc0lg3W//VMuIHagTj4L6uP/sNAWSOWGloWUFUkzb8Mr5PMK9+ELX
-# 5f4xMvH+VidKvGI0ojDhwq/VZ93/G67pDSeCuDYBjCB1Ki4sBoq3u1GJWyqdTJZv
-# pG04QkPgtBiw/V0M1oap/cmDj4aZhmN8mzRMXa5FEIfse1PYVz6IL/wtRa3ulWaI
-# LxuMYclFozpppABbKuCUhl1i5hyhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCCa7JObHyq8/DSL5m/bpycUo1eepyHq1GhP5Cg5bXF2
+# zzANBgkqhkiG9w0BAQEFAASCAYA8x0p7YFRkxQFo6/1ybxZfsd5ywML4Exy+E2Jj
+# Dnj1mGxZgcdZ2Z8jJUfRquDN2KuqnbhlqXzvO0h/TER8MBVb8GABxjDJSt93pL/E
+# J8+Tm8P6QpfvLC1fSL3K/nxmc1x1LvbVSpGEqfya0JIyvDrxN3hj6kBCfQ7gRfl5
+# lzygbTqC+Z2p0nmxKSbC4PoyVdugQDsCG7xLhm6BVGVvY2oRKZ8VBdiiKR4XuuPT
+# Ho9GVuUZiJSXu7cbUo9ERm3K+V6kIoTilITwYpD/L2eheJEz1OCm1ejZZK6COVEP
+# C6ljlbAm3STKZaseIaqNxOYGcxnXI5MfMEJFZddx7H0yKmZ7tTTpdqILrbgQ+sbK
+# amzzaEnP+6hw2gMvAnaJb/EmL/GJOWHHXsA03IB0t0mkAVaiJoS+6aHinbCPmoU+
+# K8xLFQpbGQoLfPBKUaiLfPX9iHl9E1f9m5d0q50vcyLUy5kwXDx2aEzvCmRVa7XY
+# 9lmwyplK0E3BB7pEyt1k8LYPN56hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODIxNDBaMD8GCSqGSIb3
-# DQEJBDEyBDDTyFvgaaI2bOxJvEjGvtpL1sHNoW3EIA1uoZEZIMxQDOy5Mw9FXY5i
-# qd4onnM0hBEwDQYJKoZIhvcNAQEBBQAEggIAUskd9AEzqkKER+uqxAD68cmveQl/
-# 4arlWPWnkhZIC57IllwCOkL3Ak+wwmKsczIYR5laFeCWTu0Lnb9EPGBqA7VOV6kA
-# 596nMN5+Ctaluhn9iM+iJpOpy2aVSrrqL/m/Wm4pH6S6cFpiIJy2L2dQp38ZSRTp
-# UzEkFEuLzp9LPs3D4HGterx4CL+ZRquJahjjWUMiBwoM6PdxcyOPSlVqeM+RF+b2
-# qlybc8235AQW95K/CQxkPquThBr6OQBVyoxA2uqTu6DcWB8IrxkgMaqoeqCwlwMQ
-# v+F+WNxSO3fbj7CH075VgaNfoc0DetdbEwMdbsTniAlKJ33us4VHufNiW0zBT1Js
-# 6rqeq4t/a/fGog3fG255UDicozyW5rlYNR5NaCOikPCNW2curkU6at+fXf2KZvnh
-# S99tMv7vN+RFhArAXEm2rQ/5Aqs/GspP+3OngB4Oc8YQzDZrqB8vKkiMbSjl3L8R
-# fLGG1p2KDlgwyX03CkAFNwxOKA/Na05uoqeD23nrylIAz3NRw1H96/tpC2LRogMa
-# rLqRt4n5htFiBZyZWvuupOZbIl2aBC1INLBPrcHYvQaX/Ktcb3FjQzSHZNGSSdzI
-# vT7eh+sIAakhu77OjoEeipUqDuzEI3/cHyqhbG/4GjslCWe+aJQbN0+rO1pt8Hmw
-# 0mUsMD3TkDKzx6Q=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjIxMzU5NTdaMD8GCSqGSIb3
+# DQEJBDEyBDCXnR3UG2bU1nhAlnd6e/4hBHaBL/ZGQxpURMqK6cZOIezpe5kn/wB1
+# dxNqHA6MyXwwDQYJKoZIhvcNAQEBBQAEggIApt0ABl9eTFTRFZXRJaS6hQCVaxf9
+# zMy4YdUvgHYGiUdgmUKQ0lAVGUAjkxbmRJGtCefQgVYK/z0BieTsT8rc7zSINPpg
+# thx6zHCrvBfX+VEeXjZFYCPf91ES1alj/B94mUZyVqyivqGaGzMdWvjvClXHhmv+
+# 1ZFEzi6r6OpCvWCAsbhoikME77qtAiodCIRmGt/HVTxzms4LHqaeihyerK4+/ePb
+# iWjG54+CuAsnShMCYUUfrqzOR+/o7WQKNb3lzmX/TzBHv4brU/asI2syxbhL1uO3
+# snhdKXM1n2rIndIvW8+NPBnH3r9CO/ioQdN7w4O3rJxi5bGLZdOPCn/JwDijypa0
+# xSeL7KnQS5TTV2ULDmnnEldY2YHgGuyalS0HmDkzaxIIqfOJi6TLkPXR28PNRtdu
+# iZtd8odiBl5G6Zn3R7dPzNRGvIIdlO50cQB4D0Jfawis4aJIJ4EGtGQCzEl0mOGb
+# Qw2wKHuOPjUhDp0+dEhNTrDu8PedSOpOdzL0GcrrczvNZgDaWWP89wTHf9NOFE/l
+# 3tpaGKMLrGeHO9w48AxCQNKLH/sozgpcwlWd8pVNlM9VjrbFR/A6VFV929Hf7lgn
+# H2vUvl6HlF4z7v3qrjAbXIAlD7TR18JHJqvuxZuLZZu2a25VhZax/TcgvdUhVqez
+# hYmZV1bJOm8XKP8=
 # SIG # End signature block
