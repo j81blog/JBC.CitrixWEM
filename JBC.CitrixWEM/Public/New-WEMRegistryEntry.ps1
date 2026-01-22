@@ -1,82 +1,142 @@
-﻿function New-WEMConfigurationSite {
+﻿function New-WEMRegistryEntry {
     <#
     .SYNOPSIS
-        Creates a new WEM Configuration Set (Site).
+        Creates a new WEM Registry Entry.
     .DESCRIPTION
-        This function creates a new WEM Configuration Set (Site) with the specified name and optional description.
+        This function creates a new Registry Entry in a specified Configuration Set (Site).
+        Registry Entries are used to manage registry values that will be applied to user sessions.
         Requires an active session established by Connect-WemApi.
+    .PARAMETER SiteId
+        The unique ID of the Configuration Set to create the Registry Entry in.
+    .PARAMETER TargetPath
+        The registry path where the value will be created (e.g., "Software\Citrix\MyApp").
+        Do not include the registry hive (HKCU/HKLM) as WEM handles this.
+    .PARAMETER TargetName
+        The name of the registry value to create.
     .PARAMETER Name
-        The name for the new Configuration Set.
-    .PARAMETER Description
-        An optional description for the Configuration Set.
-    .PARAMETER ScopeUid
-        An optional RBAC Scope UID to associate with the Configuration Set (Cloud only).
-        Use Get-WEMRbacScope to retrieve available scopes.
+        The display name for the Registry Entry in WEM. If not specified, defaults to TargetName.
+    .PARAMETER TargetType
+        The registry value type. Valid values are:
+        REG_SZ, REG_EXPAND_SZ, REG_BINARY, REG_DWORD, REG_DWORD_LITTLE_ENDIAN,
+        REG_QWORD, REG_QWORD_LITTLE_ENDIAN, REG_MULTI_SZ, REG_NONE
+    .PARAMETER TargetValue
+        The value to set. For REG_DWORD and REG_QWORD types, use an integer.
+        For string types, use a string value.
+    .PARAMETER Enabled
+        Whether the Registry Entry is enabled. Defaults to $true.
+    .PARAMETER Tags
+        Optional array of tags to associate with the Registry Entry.
     .EXAMPLE
         PS C:\> # First, connect to the API
         PS C:\> Connect-WemApi -CustomerId "abcdef123" -UseSdkAuthentication
 
-        PS C:\> # Create a new configuration set
-        PS C:\> New-WEMConfigurationSite -Name "Production Site" -Description "Production environment configuration"
+        PS C:\> # Create a new string registry entry
+        PS C:\> New-WEMRegistryEntry -SiteId 7 -TargetPath "Software\MyApp" -TargetName "Setting1" -TargetType "REG_SZ" -TargetValue "MyValue"
 
     .EXAMPLE
-        PS C:\> # Create a configuration set without a description
-        PS C:\> New-WEMConfigurationSite -Name "Test Site"
+        PS C:\> # Create a DWORD registry entry with tags
+        PS C:\> New-WEMRegistryEntry -SiteId 7 -TargetPath "Software\MyApp" -TargetName "EnableFeature" -Name "My Feature Toggle" -TargetType "REG_DWORD" -TargetValue 1 -Tags @("Production", "Feature")
+
     .EXAMPLE
-        PS C:\> # Create a configuration set with an RBAC scope (Cloud only)
-        PS C:\> $Scope = Get-WEMRbacScope | Where-Object Name -eq "My Scope"
-        PS C:\> New-WEMConfigurationSite -Name "Scoped Site" -ScopeUid $Scope.Uid
+        PS C:\> # Create a disabled registry entry
+        PS C:\> New-WEMRegistryEntry -SiteId 7 -TargetPath "Software\MyApp" -TargetName "TestSetting" -TargetType "REG_SZ" -TargetValue "Test" -Enabled:$false
     .NOTES
-        Version:        1.1
+        Version:        1.0
         Author:         John Billekens Consultancy
         Co-Author:      Claude
-        Creation Date:  2025-11-06
-        Modified Date:  2026-01-19
+        Creation Date:  2026-01-20
     #>
     [CmdletBinding(SupportsShouldProcess = $true)]
-    [Alias("New-WEMSite")]
     [OutputType([PSCustomObject])]
     param(
+        [Parameter(Mandatory = $false)]
+        [int]$SiteId,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet("Create", "Delete")]
+        [string]$ActionType = "Create",
+
         [Parameter(Mandatory = $true)]
         [ValidateNotNullOrEmpty()]
+        [string]$TargetPath,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$TargetName,
+
+        [Parameter(Mandatory = $false)]
         [string]$Name,
 
-        [Parameter(Mandatory = $false)]
-        [string]$Description,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("REG_SZ", "REG_EXPAND_SZ", "REG_BINARY", "REG_DWORD", "REG_DWORD_LITTLE_ENDIAN", "REG_QWORD", "REG_QWORD_LITTLE_ENDIAN", "REG_MULTI_SZ", "REG_NONE")]
+        [string]$TargetType,
+
+        [Parameter(Mandatory = $true)]
+        $TargetValue,
 
         [Parameter(Mandatory = $false)]
-        [string]$ScopeUid
+        [switch]$Enabled,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$RunOnce,
+
+        [Parameter(Mandatory = $false)]
+        [string[]]$Tags
     )
 
     try {
         # Get connection details. Throws an error if not connected.
         $Connection = Get-WemApiConnection
 
-        $UriPath = "services/wem/sites"
+        $ResolvedSiteId = 0
+        if ($PSBoundParameters.ContainsKey('SiteId')) {
+            $ResolvedSiteId = $SiteId
+        } elseif ($Connection.ActiveSiteId) {
+            $ResolvedSiteId = $Connection.ActiveSiteId
+            Write-Verbose "Using active Configuration Set '$($Connection.ActiveSiteName)' (ID: $ResolvedSiteId)"
+        } else {
+            throw "No -SiteId was provided, and no active Configuration Set has been set. Please use Set-WEMActiveConfigurationSite or specify the -SiteId parameter."
+        }
+
+        $UriPath = "services/wem/action/registryEntry"
 
         # Build the request body
         $Body = @{
-            name = $Name
+            siteId      = $ResolvedSiteId
+            actionType  = $ActionType
+            targetPath  = $TargetPath
+            targetName  = $TargetName
+            targetType  = $TargetType
+            enabled     = $Enabled.IsPresent
+            runOnce     = $RunOnce.IsPresent
         }
 
-        # Add description if provided
-        if ($PSBoundParameters.ContainsKey('Description')) {
-            $Body.description = $Description
+        if ($ActionType -eq "Create") {
+            $Body.targetValue = $TargetValue
+        }
+        # Use TargetName as Name if not specified
+        if ($PSBoundParameters.ContainsKey('Name') -and -not [string]::IsNullOrEmpty($Name)) {
+            $Body.name = $Name
+        } else {
+            $Body.name = $TargetName
         }
 
-        # Add scopeUid if provided (Cloud only)
-        if ($PSBoundParameters.ContainsKey('ScopeUid')) {
-            $Body.scopeUid = $ScopeUid
+        # Add tags if provided
+        if ($PSBoundParameters.ContainsKey('Tags') -and $null -ne $Tags -and $Tags.Count -gt 0) {
+            $Body.tags = $Tags
+        } else {
+            $Body.tags = @()
         }
 
-        $TargetDescription = "Configuration Set '$Name'"
-        if ($PSCmdlet.ShouldProcess($TargetDescription, "Create Configuration Set")) {
+        $DisplayName = if ($Body.name) { $Body.name } else { $TargetName }
+        $TargetDescription = "Registry Entry '$DisplayName' at '$TargetPath\$TargetName'"
+        if ($PSCmdlet.ShouldProcess($TargetDescription, "Create Registry Entry")) {
             $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
-            Write-Verbose "Configuration Set '$Name' created successfully."
+            Write-Verbose "Registry Entry '$DisplayName' created successfully."
             Write-Output ($Result | Expand-WEMResult)
         }
     } catch {
-        Write-Error "Failed to create WEM Configuration Set: $($_.Exception.Message)"
+        Write-Error "Failed to create WEM Registry Entry: $($_.Exception.Message)"
         return $null
     }
 }
@@ -84,8 +144,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCt5U2WauXPKA0r
-# SxEujVhj0BVM1mVNC3U8Osxcl7YEs6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAx7YHRft2rr0Sk
+# zTeTBhNanjSa66bWd6slTfpe6uPO/aCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -261,31 +321,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBeT7/TFGWiKIdSL0qqROEPuvgZhz4ux/BBqYFlKhXD
-# aTANBgkqhkiG9w0BAQEFAASCAYAw82PgcOcrKfBRkRkUmJ91w2YGvIO+bv/kVxZv
-# qvvk4cWdx2P1C9dhidoxzmunnysGH65zzrAiXje/8nxdV/lWyzx3TvqTL/goCLcS
-# rCPJEnX2xjgiXOf8daawy/OPNfKlKEkShbGUYvCkWwLkzap2t9w5of0YzoWYwrQo
-# Y0EiglbXoGlnXuYQWDl0tUKQPJZvI1kR2sNzcvrNQZJtGz5e8I4B3nVB0YewkkzM
-# kvgWgdo2Gg/nRI2If5hv1qBj6quO7bDqz+1ngytn3ft8bVBCVBk9haQbL3bMmlBC
-# eISVG90V5dcHTe2tdToavnovOb+C/Izw/xPqc1dlOR70ZuRNIBpIQiTWDeCtS4Ry
-# fAcEIFAAKmc7zie4zHZ0lF0BWAZyVL3ftvC7Mceycn3EnWL1wxq0+6efWWYD5M1G
-# hsHHI+3fhr7mDhxBREJy6qeC4RJ3P3zyTFFgv5FUbJadsI585eXBqv2s0WfvbyGP
-# QtxyGXQnJxsAXmC+1usVI8utvwChggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDA0Mtgu3O8xo0gLaqydtwk6v7auXkMZmVMap6xSsAu
+# PDANBgkqhkiG9w0BAQEFAASCAYAh0kHCD6wpeJUXCufGOG4E9vtLW616OwLAFz/Z
+# P7pGMt6H2J3HHw7K9C769R+UwjdqfkVUNsW6HhMi9mNlX9oPs3X1r5qJv9xYhZUs
+# YEpoKGf9KHQVXSj+4BmoUrD240BIcJcA8j3u5Pjh45tM6X9NSTJ07n6XxuBP0tsO
+# 4ZolE+AzbbmgjBnTUAIlZWrc/pRRpyBkl56gSnnKoILcUvmqkrx04BIR5mDooGjn
+# Y/QlMu/aCS3Ar0WMlLhmHf3/p8ldvk25fwIstMlUHPCGn8bmmak+j4opJaVtxXt8
+# Q6C3yMPyxQDBUnR5yp0OkwILpxssXQKrLZn0MDgQve5Clt2r2afkCvk2u16eBJj7
+# M/tQ3r6dEJy65icuvRhGVHclMDB5f1M9J9Oi34HAy0TPwR/CKaQVuloKfOAQ/UE1
+# zf0ujNGbyRA2VhXeP6Z5dlp9w8cvFhvvuESiYTXmWVgDGb5hVbJv9gzeohBgzVK2
+# WsT2SevQDvwg5VvHVxZSeRNkVJuhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODE4NThaMD8GCSqGSIb3
-# DQEJBDEyBDBU3r6GO055f4hRgTEvwNo11IHOM7jkD1saezBtJW+3+nTCiN/AtI6T
-# 2z+bv+I5T3YwDQYJKoZIhvcNAQEBBQAEggIAqlHu2WByuqh6KHb+iw/0YGXe6EC+
-# umhPurilK6/j8NB0ceFvkOYvq65C8OtIP0z5sw8nPT70/NTeC8IU7YsLtdH6x4gE
-# K4KDawaU8aCFiVhT16iSHD8myIV+zgJ2bi4LRaXqCRoS7dYsTI25YAWoAfIhK61X
-# ByamsCIl5CUMUYEcI74g7nj+WZbOGE6F6CykcsdA3BaQyBy1l1Hb4ATuRNwLJyb1
-# 2L2JGvWv2IfEgw2Lz0ZBP90aQJddWRzcosZZITY9zJ+r7YjZM1tG9eOxoaCXVOyv
-# 1Tq9Wv4gyehH15FyGEC80xcthxwN79TgqcUFGoowxMMpVVe6MioVIGK5z7uCkzdz
-# PdjD25CqwKPAvkbD/K2xpHQQ63njSDtzChjEP3Evchdf+XemRjAFZuCMC1rqKqOV
-# ajqDL/Pi+PY65M2VWV9Ttl0RDZ5AfOU23byXQHV+zPktI+D7xqNHy4xmGW5Ydhxf
-# ONoxDYfvvtkYIVToVlQeW3ZTOGrgL7xg7FEswADsFQRa0pbc5s4x92mTY6SEKEn4
-# zjgGG/nPDinC5Ul+Bx240bjN610upBz0hmY160iYd0L7i+z9YS1Mbg0UdmtesIWV
-# +pblMkrHir2GSLVIdU+ylqfFRCHIzDGsdbQQ0I9Z1vhOZKHM6WR9JzKH5QuMvrRu
-# n8W0jxTFAmTsWTU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAyMjMyMzNaMD8GCSqGSIb3
+# DQEJBDEyBDCy3BMZgrkJZKlPuvxRldgk6WiamNu94uMGIPvL7ihxFVopjR5PgCGD
+# FeToTFezvGQwDQYJKoZIhvcNAQEBBQAEggIAmxf3A4gMhEkmCmhZbZvuzgECdD+R
+# A+I7uEIH/ESRE2B4+2C4hV1bWUTJhbXWF2V1y8nz3KIlwvgO6xIS+kHtOUnQomgO
+# eDNZstWfl4F/AvG7NFaQqQmCieHBkn2+gRW2/e+Q0pPB2pHeje1C23pRacu4zWKH
+# XS0quQEIGD52b9QAhoqUCuAFXgV/KWNaoOCCtPiuT74XEJiwSYY/WeY0cKe9hGKh
+# oETECE5Figl7BualRoFG1G3rfCqJew2DlohIP0n/FQy1dER4cfp5nY2dLeQpCd++
+# TfZ6B9XTgwF9IsGobRPjJOzEEHy1JoPGWggPdMUs63+OU3tgIwsiVUddA/6ghvSE
+# zZlzKpSOA8AzdaoNC77ZGdHDvDoFNMQ/51QrMqGQvIEt3siKL98ApnaCbk02p8Ho
+# MgHkAFeoxQpPoiZ0XIC4l1MdL3DA0UVzgM5WngL+Sn/Ewz7LdXJU+P/gqIIVXFQu
+# iseKu/DUqrmYjsZ2JX5ovxRYhwMtnw/vr3FiTzTp/VG9qMFt5uY2bPzFYOuwDxNN
+# T2tYkG5GZbR5UQofn3yAc16AAr/rwVN21KDmmo/Z4LnfCEsDkR7dC1bhjL48oN9K
+# vc+aBZ/Cv2MBFAaILKiHwnyRWcf98W/tFp2Pj+7ppIk3BB3cl34kWFDcZPhRRsW/
+# PiyLbRwue8GTXcE=
 # SIG # End signature block

@@ -1,82 +1,65 @@
-﻿function New-WEMConfigurationSite {
+﻿function Get-WEMRegistryEntry {
     <#
     .SYNOPSIS
-        Creates a new WEM Configuration Set (Site).
+        Retrieves WEM Registry Entries for a Configuration Set.
     .DESCRIPTION
-        This function creates a new WEM Configuration Set (Site) with the specified name and optional description.
+        This function retrieves a list of all Registry Entries for a specified Configuration Set (Site).
+        Registry Entries are used to manage registry values that will be applied to user sessions.
         Requires an active session established by Connect-WemApi.
-    .PARAMETER Name
-        The name for the new Configuration Set.
-    .PARAMETER Description
-        An optional description for the Configuration Set.
-    .PARAMETER ScopeUid
-        An optional RBAC Scope UID to associate with the Configuration Set (Cloud only).
-        Use Get-WEMRbacScope to retrieve available scopes.
+    .PARAMETER SiteId
+        The unique ID of the Configuration Set to retrieve Registry Entries from.
+    .PARAMETER GetAssignmentCount
+        When specified, includes the assignment count for each Registry Entry.
     .EXAMPLE
         PS C:\> # First, connect to the API
         PS C:\> Connect-WemApi -CustomerId "abcdef123" -UseSdkAuthentication
 
-        PS C:\> # Create a new configuration set
-        PS C:\> New-WEMConfigurationSite -Name "Production Site" -Description "Production environment configuration"
+        PS C:\> # Retrieve all registry entries for site 7
+        PS C:\> Get-WEMRegistryEntry -SiteId 7
 
     .EXAMPLE
-        PS C:\> # Create a configuration set without a description
-        PS C:\> New-WEMConfigurationSite -Name "Test Site"
-    .EXAMPLE
-        PS C:\> # Create a configuration set with an RBAC scope (Cloud only)
-        PS C:\> $Scope = Get-WEMRbacScope | Where-Object Name -eq "My Scope"
-        PS C:\> New-WEMConfigurationSite -Name "Scoped Site" -ScopeUid $Scope.Uid
+        PS C:\> # Retrieve registry entries with assignment counts
+        PS C:\> Get-WEMRegistryEntry -SiteId 7 -GetAssignmentCount
     .NOTES
-        Version:        1.1
+        Version:        1.0
         Author:         John Billekens Consultancy
         Co-Author:      Claude
-        Creation Date:  2025-11-06
-        Modified Date:  2026-01-19
+        Creation Date:  2026-01-20
     #>
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    [Alias("New-WEMSite")]
-    [OutputType([PSCustomObject])]
+    [CmdletBinding()]
+    [OutputType([PSCustomObject[]])]
     param(
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Name,
+        [Parameter(Mandatory = $false)]
+        [int]$SiteId,
 
         [Parameter(Mandatory = $false)]
-        [string]$Description,
-
-        [Parameter(Mandatory = $false)]
-        [string]$ScopeUid
+        [switch]$GetAssignmentCount
     )
 
     try {
         # Get connection details. Throws an error if not connected.
         $Connection = Get-WemApiConnection
 
-        $UriPath = "services/wem/sites"
-
-        # Build the request body
-        $Body = @{
-            name = $Name
+        $ResolvedSiteId = 0
+        if ($PSBoundParameters.ContainsKey('SiteId')) {
+            $ResolvedSiteId = $SiteId
+        } elseif ($Connection.ActiveSiteId) {
+            $ResolvedSiteId = $Connection.ActiveSiteId
+            Write-Verbose "Using active Configuration Set '$($Connection.ActiveSiteName)' (ID: $ResolvedSiteId)"
+        } else {
+            throw "No -SiteId was provided, and no active Configuration Set has been set. Please use Set-WEMActiveConfigurationSite or specify the -SiteId parameter."
         }
 
-        # Add description if provided
-        if ($PSBoundParameters.ContainsKey('Description')) {
-            $Body.description = $Description
+        $UriPath = "services/wem/action/registryEntry?siteId=$ResolvedSiteId"
+
+        if ($GetAssignmentCount) {
+            $UriPath += "&getAssignmentCount=true"
         }
 
-        # Add scopeUid if provided (Cloud only)
-        if ($PSBoundParameters.ContainsKey('ScopeUid')) {
-            $Body.scopeUid = $ScopeUid
-        }
-
-        $TargetDescription = "Configuration Set '$Name'"
-        if ($PSCmdlet.ShouldProcess($TargetDescription, "Create Configuration Set")) {
-            $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
-            Write-Verbose "Configuration Set '$Name' created successfully."
-            Write-Output ($Result | Expand-WEMResult)
-        }
+        $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "GET" -Connection $Connection
+        Write-Output ($Result | Expand-WEMResult)
     } catch {
-        Write-Error "Failed to create WEM Configuration Set: $($_.Exception.Message)"
+        Write-Error "Failed to retrieve WEM Registry Entries: $($_.Exception.Message)"
         return $null
     }
 }
@@ -84,8 +67,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCt5U2WauXPKA0r
-# SxEujVhj0BVM1mVNC3U8Osxcl7YEs6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAXuPRUYUdFc8h/
+# BASIwMjXmpx3sylS9KCkLaf0VAuLNaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -261,31 +244,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBeT7/TFGWiKIdSL0qqROEPuvgZhz4ux/BBqYFlKhXD
-# aTANBgkqhkiG9w0BAQEFAASCAYAw82PgcOcrKfBRkRkUmJ91w2YGvIO+bv/kVxZv
-# qvvk4cWdx2P1C9dhidoxzmunnysGH65zzrAiXje/8nxdV/lWyzx3TvqTL/goCLcS
-# rCPJEnX2xjgiXOf8daawy/OPNfKlKEkShbGUYvCkWwLkzap2t9w5of0YzoWYwrQo
-# Y0EiglbXoGlnXuYQWDl0tUKQPJZvI1kR2sNzcvrNQZJtGz5e8I4B3nVB0YewkkzM
-# kvgWgdo2Gg/nRI2If5hv1qBj6quO7bDqz+1ngytn3ft8bVBCVBk9haQbL3bMmlBC
-# eISVG90V5dcHTe2tdToavnovOb+C/Izw/xPqc1dlOR70ZuRNIBpIQiTWDeCtS4Ry
-# fAcEIFAAKmc7zie4zHZ0lF0BWAZyVL3ftvC7Mceycn3EnWL1wxq0+6efWWYD5M1G
-# hsHHI+3fhr7mDhxBREJy6qeC4RJ3P3zyTFFgv5FUbJadsI585eXBqv2s0WfvbyGP
-# QtxyGXQnJxsAXmC+1usVI8utvwChggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCD5Yy9nDgvEUTSStdrkMLeBGv8/8uutSJ9kiUe3DYtW
+# zTANBgkqhkiG9w0BAQEFAASCAYB3nYcEZnwLW2kKyLR6n2f6jxmIQ+nOUHPBijLp
+# 2+FhdADWoV7E+zffyFW6xasNb9wCAm9kNHmaf1+PaX59UcIzOWtjV3K6tQj5bgH4
+# PJK+gZECtMKACZyaPbeXg4etnANpI6X/sK6aHcYOrpwT4D6Y/AGnnUjoqYoPF8RI
+# ZWA1pvPDLOJ6e3WfdFxEQ5c8IAMDc4V1Y4W+uzFs7dOD3vpQm3y06KcQhe12ED1o
+# 1AXJyYMoVd/AMnPxdH2LzWPJSQc5XMoELgHJNB+VEmLNJJXMM7h6V0gJEhUat20J
+# tCC7nDJFhTrwkb744PTPIKEe30Z2QkDXLA349ualjz21U4betmmrcnufxsdTzERs
+# oSO4YA8IyumfajQPtOybEttNv1odRZPRQG3hVvSSc3GfAm4y69NOaej/Skuf72eS
+# eWCMSruJRUqH1z8pzBJ/7LYpz03hLZeKBrJ4jK4sKWskICUqSIAfHDLNEWA8FXvg
+# cJh7/NmQ2Tx3jzbs74k4I08YChihggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODE4NThaMD8GCSqGSIb3
-# DQEJBDEyBDBU3r6GO055f4hRgTEvwNo11IHOM7jkD1saezBtJW+3+nTCiN/AtI6T
-# 2z+bv+I5T3YwDQYJKoZIhvcNAQEBBQAEggIAqlHu2WByuqh6KHb+iw/0YGXe6EC+
-# umhPurilK6/j8NB0ceFvkOYvq65C8OtIP0z5sw8nPT70/NTeC8IU7YsLtdH6x4gE
-# K4KDawaU8aCFiVhT16iSHD8myIV+zgJ2bi4LRaXqCRoS7dYsTI25YAWoAfIhK61X
-# ByamsCIl5CUMUYEcI74g7nj+WZbOGE6F6CykcsdA3BaQyBy1l1Hb4ATuRNwLJyb1
-# 2L2JGvWv2IfEgw2Lz0ZBP90aQJddWRzcosZZITY9zJ+r7YjZM1tG9eOxoaCXVOyv
-# 1Tq9Wv4gyehH15FyGEC80xcthxwN79TgqcUFGoowxMMpVVe6MioVIGK5z7uCkzdz
-# PdjD25CqwKPAvkbD/K2xpHQQ63njSDtzChjEP3Evchdf+XemRjAFZuCMC1rqKqOV
-# ajqDL/Pi+PY65M2VWV9Ttl0RDZ5AfOU23byXQHV+zPktI+D7xqNHy4xmGW5Ydhxf
-# ONoxDYfvvtkYIVToVlQeW3ZTOGrgL7xg7FEswADsFQRa0pbc5s4x92mTY6SEKEn4
-# zjgGG/nPDinC5Ul+Bx240bjN610upBz0hmY160iYd0L7i+z9YS1Mbg0UdmtesIWV
-# +pblMkrHir2GSLVIdU+ylqfFRCHIzDGsdbQQ0I9Z1vhOZKHM6WR9JzKH5QuMvrRu
-# n8W0jxTFAmTsWTU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODU2NDhaMD8GCSqGSIb3
+# DQEJBDEyBDBciPROuWIm8TR4XlFXHoyy81naPXhLeRcH4EDuCv2tJ75gv27tSMNc
+# M3APOUIedTEwDQYJKoZIhvcNAQEBBQAEggIAV9y9W2QPKg1DcRhyf1Y/PGhOTgfU
+# zGHsAGkVK+yVvIcy51SFGnILXxKkA8AEHZdyFlL7v4J2siW+SuUvgV0B2gw0MRo7
+# q/E7u26b+ExeW/m28wpYS4jF6CgyX7W00UuJ9Yec0363zv2UbwygJixovRjKgHYO
+# QTrf29aCQNjYOHv/4eA/Keg3VXTw0Gb7h30XOTlD1BuBp7NrK28TVXW9j2mcL+mP
+# H8rqGk9N0u13WZZiwiue9VQZ39j4MDNHiVruUDhM92pv/ATPDaxgPuOtsRGk+JHf
+# nbbjj57hJINlT8i9X7dK+HxFoYhLshnQdFy4BEFqaytR/ZCZam/WzE1E4DYNCgeE
+# k0Diow2G8oyACe3HYcWNHt79fLB6o9pC7Xg400ZZqaEqwo/hMuWlYP/JZkPAIdnC
+# bDbOx9nxg7Npaqv+dAcyPhDKnfDckvbfLo0FUh2RoqIbS/Hz6VSYvICBSMJISDuE
+# Xs06rl+t1esHzvildCzIHFkHvOMdsDjxZ62tVNlk8WbiUhBVqfPL51LcBcCwL1gd
+# 5PlkGTrE2Ec+jb/cxuPaA3kQHmY4XyCyBGS3WtBMo6ia+X2+7r+1oSJj8/FS08pp
+# lI2T2rb67nl2sjIpX12CSCI5Hw1/2PFrOTO8P8A0KElhkcysdNsuIx1ylKWvVtwL
+# yQo4/6RPyU5e2zQ=
 # SIG # End signature block

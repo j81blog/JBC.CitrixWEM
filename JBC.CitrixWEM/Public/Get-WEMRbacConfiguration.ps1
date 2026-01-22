@@ -1,82 +1,44 @@
-﻿function New-WEMConfigurationSite {
+﻿function Get-WEMRbacConfiguration {
     <#
     .SYNOPSIS
-        Creates a new WEM Configuration Set (Site).
+        Retrieves WEM RBAC Configurations (Cloud only).
     .DESCRIPTION
-        This function creates a new WEM Configuration Set (Site) with the specified name and optional description.
+        This function retrieves a list of all RBAC (Role-Based Access Control) Configurations
+        for the current customer. RBAC Configurations define the role assignments and permissions
+        for administrators in WEM.
+        This function is only available for WEM Cloud environments.
         Requires an active session established by Connect-WemApi.
-    .PARAMETER Name
-        The name for the new Configuration Set.
-    .PARAMETER Description
-        An optional description for the Configuration Set.
-    .PARAMETER ScopeUid
-        An optional RBAC Scope UID to associate with the Configuration Set (Cloud only).
-        Use Get-WEMRbacScope to retrieve available scopes.
     .EXAMPLE
         PS C:\> # First, connect to the API
         PS C:\> Connect-WemApi -CustomerId "abcdef123" -UseSdkAuthentication
 
-        PS C:\> # Create a new configuration set
-        PS C:\> New-WEMConfigurationSite -Name "Production Site" -Description "Production environment configuration"
+        PS C:\> # Retrieve all RBAC configurations
+        PS C:\> Get-WEMRbacConfiguration
 
     .EXAMPLE
-        PS C:\> # Create a configuration set without a description
-        PS C:\> New-WEMConfigurationSite -Name "Test Site"
-    .EXAMPLE
-        PS C:\> # Create a configuration set with an RBAC scope (Cloud only)
-        PS C:\> $Scope = Get-WEMRbacScope | Where-Object Name -eq "My Scope"
-        PS C:\> New-WEMConfigurationSite -Name "Scoped Site" -ScopeUid $Scope.Uid
+        PS C:\> # Get RBAC configurations and filter by a specific scope
+        PS C:\> Get-WEMRbacConfiguration | Where-Object { $_.ScopeUid -eq "4e5c7352-120f-4c0a-8728-32b75c3826aa" }
     .NOTES
-        Version:        1.1
+        Version:        1.0
         Author:         John Billekens Consultancy
         Co-Author:      Claude
-        Creation Date:  2025-11-06
-        Modified Date:  2026-01-19
+        Creation Date:  2026-01-19
     #>
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    [Alias("New-WEMSite")]
-    [OutputType([PSCustomObject])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Name,
-
-        [Parameter(Mandatory = $false)]
-        [string]$Description,
-
-        [Parameter(Mandatory = $false)]
-        [string]$ScopeUid
-    )
+    [CmdletBinding()]
+    [Alias("Get-WEMRbacConfig")]
+    [OutputType([PSCustomObject[]])]
+    param()
 
     try {
         # Get connection details. Throws an error if not connected.
         $Connection = Get-WemApiConnection
 
-        $UriPath = "services/wem/sites"
+        $UriPath = "services/wem/rbac/configurations"
 
-        # Build the request body
-        $Body = @{
-            name = $Name
-        }
-
-        # Add description if provided
-        if ($PSBoundParameters.ContainsKey('Description')) {
-            $Body.description = $Description
-        }
-
-        # Add scopeUid if provided (Cloud only)
-        if ($PSBoundParameters.ContainsKey('ScopeUid')) {
-            $Body.scopeUid = $ScopeUid
-        }
-
-        $TargetDescription = "Configuration Set '$Name'"
-        if ($PSCmdlet.ShouldProcess($TargetDescription, "Create Configuration Set")) {
-            $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
-            Write-Verbose "Configuration Set '$Name' created successfully."
-            Write-Output ($Result | Expand-WEMResult)
-        }
+        $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "GET" -Connection $Connection
+        Write-Output ($Result | Expand-WEMResult)
     } catch {
-        Write-Error "Failed to create WEM Configuration Set: $($_.Exception.Message)"
+        Write-Error "Failed to retrieve WEM RBAC Configurations: $($_.Exception.Message)"
         return $null
     }
 }
@@ -84,8 +46,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCt5U2WauXPKA0r
-# SxEujVhj0BVM1mVNC3U8Osxcl7YEs6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCA0Z6NW4hYI2sjt
+# r0QYGCzi6ftxkGbJeDPfGkt5ZBYPWaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -261,31 +223,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBeT7/TFGWiKIdSL0qqROEPuvgZhz4ux/BBqYFlKhXD
-# aTANBgkqhkiG9w0BAQEFAASCAYAw82PgcOcrKfBRkRkUmJ91w2YGvIO+bv/kVxZv
-# qvvk4cWdx2P1C9dhidoxzmunnysGH65zzrAiXje/8nxdV/lWyzx3TvqTL/goCLcS
-# rCPJEnX2xjgiXOf8daawy/OPNfKlKEkShbGUYvCkWwLkzap2t9w5of0YzoWYwrQo
-# Y0EiglbXoGlnXuYQWDl0tUKQPJZvI1kR2sNzcvrNQZJtGz5e8I4B3nVB0YewkkzM
-# kvgWgdo2Gg/nRI2If5hv1qBj6quO7bDqz+1ngytn3ft8bVBCVBk9haQbL3bMmlBC
-# eISVG90V5dcHTe2tdToavnovOb+C/Izw/xPqc1dlOR70ZuRNIBpIQiTWDeCtS4Ry
-# fAcEIFAAKmc7zie4zHZ0lF0BWAZyVL3ftvC7Mceycn3EnWL1wxq0+6efWWYD5M1G
-# hsHHI+3fhr7mDhxBREJy6qeC4RJ3P3zyTFFgv5FUbJadsI585eXBqv2s0WfvbyGP
-# QtxyGXQnJxsAXmC+1usVI8utvwChggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCCIdvVpfdXyq06jHug1edGOfkRnl084okmRkPa6yszV
+# wjANBgkqhkiG9w0BAQEFAASCAYCvYyIMytXr9CKbgAcUARIN5lLwEVrkXuAqmFJl
+# 6ot0Lc0Nq01F9NQQYLtC9VxzYJdVx6OnsYsGzOzEVqAEBGeePtYfz8h8EJKsjGWa
+# kbb9QLSa15UQMtSZVLftBby2nN/pvkb8PPKmG/tlIwovh1NqQXApZs6u8EucW/1c
+# IW52EYAEkZPiL5eRpO9sjLDp6ySKRzp68KTOkZ0HT7Gu+hhC3QH8dZBseUES2NLu
+# PIb1h8F5nHch6mOmAV01hUMViJOgINrB/akOhjcqfzDun+DlljFxJ3AO01DdkYH/
+# xZq6Kpb+KZeUuRUT9Z1ds/12GayS/6UtizGy6wJH6iX7NFgo1rps0JNGM4r7RO5F
+# sXE53d/q2UuLzxC3Q7TgtsSURvmc3KtgPAoyVtGEQz6NfWMtnlBrqbG/dX5xyorS
+# 9p3Nvx4tvGm8YmtziTXAVSvDJAm3zWMFVYKfS4pEEqUo5bE+HQ9zh6GoBCj63CHo
+# hNB2SoZlSOP5RsAqtX2llEl2SsGhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODE4NThaMD8GCSqGSIb3
-# DQEJBDEyBDBU3r6GO055f4hRgTEvwNo11IHOM7jkD1saezBtJW+3+nTCiN/AtI6T
-# 2z+bv+I5T3YwDQYJKoZIhvcNAQEBBQAEggIAqlHu2WByuqh6KHb+iw/0YGXe6EC+
-# umhPurilK6/j8NB0ceFvkOYvq65C8OtIP0z5sw8nPT70/NTeC8IU7YsLtdH6x4gE
-# K4KDawaU8aCFiVhT16iSHD8myIV+zgJ2bi4LRaXqCRoS7dYsTI25YAWoAfIhK61X
-# ByamsCIl5CUMUYEcI74g7nj+WZbOGE6F6CykcsdA3BaQyBy1l1Hb4ATuRNwLJyb1
-# 2L2JGvWv2IfEgw2Lz0ZBP90aQJddWRzcosZZITY9zJ+r7YjZM1tG9eOxoaCXVOyv
-# 1Tq9Wv4gyehH15FyGEC80xcthxwN79TgqcUFGoowxMMpVVe6MioVIGK5z7uCkzdz
-# PdjD25CqwKPAvkbD/K2xpHQQ63njSDtzChjEP3Evchdf+XemRjAFZuCMC1rqKqOV
-# ajqDL/Pi+PY65M2VWV9Ttl0RDZ5AfOU23byXQHV+zPktI+D7xqNHy4xmGW5Ydhxf
-# ONoxDYfvvtkYIVToVlQeW3ZTOGrgL7xg7FEswADsFQRa0pbc5s4x92mTY6SEKEn4
-# zjgGG/nPDinC5Ul+Bx240bjN610upBz0hmY160iYd0L7i+z9YS1Mbg0UdmtesIWV
-# +pblMkrHir2GSLVIdU+ylqfFRCHIzDGsdbQQ0I9Z1vhOZKHM6WR9JzKH5QuMvrRu
-# n8W0jxTFAmTsWTU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODE4NDlaMD8GCSqGSIb3
+# DQEJBDEyBDB2hIAlJTEzZchYCjeD5Gbh3a54/zysiye1b10UrCop3ugfK701z4H4
+# xZNs8ESpPvUwDQYJKoZIhvcNAQEBBQAEggIABrKOma9/vjVttsJnzljdLFsqCV+X
+# gzGIhYjyP4x7BiejmrqlliPVHjUSUvoDOkjdGnA5lbfTOK1AH/i1Ca9uP8h3Rxt2
+# 49/2845s4LHQvZLvxM6/zj4y35aJuVBBU9bEwqBZSBp8KXrM3uS41XQcQPnMQ9Wb
+# bCHA3CxyDFBKkG6nRAyrRtEyn++PbtRVn/3gOVOGm54+iNwkkClCLA9O4frr7PBt
+# tjY4qGIWbhpttlbl1c8/WqHXyFXzQFueya9YokBAsroqdASjfrADEN8oLn41MqEy
+# pPVLtKe0xBF4OiWw17Vc3WzHGhFMlQK9ajXhkYJnfMAQ4G/POm+JYwlaYQzUW4XU
+# hvaHEHIsTV2pG67I7WB12/aWVLBkJ4n+sxs64mlr8wT6Rtn7xdY7ycZMAgZ92tZQ
+# Cf65ib47EeZnvsOxd7Wq2vx00qCdbSblOHVzeSfQSwoYoer9oEzS7fzdVY7wvgLF
+# 4yp6F1/inqzTnfiBwLQ1g127IwJOz6lT+OJeUoJJEkZ8YWhfeZmWbYukVS9wP/Yz
+# o3kSZmdZSm/o1EOcK4PplMaUxIMxxduyDCaHk8a6wM59emvEeAqUGL+JkPIisBxt
+# wv8Mo3Ap3tfMf5MToUy+PtcQbdlR0q8iiJSty9Tpy3aURUQsybYktC5EViWTMtiR
+# bcORmStU5MKzvSI=
 # SIG # End signature block

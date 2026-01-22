@@ -1,91 +1,78 @@
-﻿function New-WEMConfigurationSite {
+﻿function Remove-WEMConfigurationSite {
     <#
     .SYNOPSIS
-        Creates a new WEM Configuration Set (Site).
+        Removes one or more WEM Configuration Sets (Sites).
     .DESCRIPTION
-        This function creates a new WEM Configuration Set (Site) with the specified name and optional description.
-        Requires an active session established by Connect-WemApi.
-    .PARAMETER Name
-        The name for the new Configuration Set.
-    .PARAMETER Description
-        An optional description for the Configuration Set.
-    .PARAMETER ScopeUid
-        An optional RBAC Scope UID to associate with the Configuration Set (Cloud only).
-        Use Get-WEMRbacScope to retrieve available scopes.
+        This function removes one or more WEM Configuration Sets (Sites) based on their unique ID.
+        This is a destructive operation and should be used with caution. Note that removing
+        a Configuration Set will also remove all associated settings, actions, and assignments.
+    .PARAMETER Id
+        The unique ID (or an array of IDs) of the Configuration Set(s) to remove.
+        This parameter accepts input from the pipeline by property name.
     .EXAMPLE
-        PS C:\> # First, connect to the API
-        PS C:\> Connect-WemApi -CustomerId "abcdef123" -UseSdkAuthentication
+        PS C:\> Remove-WEMConfigurationSite -Id 6
 
-        PS C:\> # Create a new configuration set
-        PS C:\> New-WEMConfigurationSite -Name "Production Site" -Description "Production environment configuration"
+        Removes the WEM Configuration Set with ID 6 after asking for confirmation.
+    .EXAMPLE
+        PS C:\> Get-WEMConfigurationSite | Where-Object Name -eq "Test Site" | Remove-WEMConfigurationSite
 
+        Finds the Configuration Set named "Test Site" and removes it via the pipeline.
     .EXAMPLE
-        PS C:\> # Create a configuration set without a description
-        PS C:\> New-WEMConfigurationSite -Name "Test Site"
+        PS C:\> Remove-WEMConfigurationSite -Id 6,7,8 -Confirm:$false
+
+        Removes multiple Configuration Sets by their IDs without prompting for confirmation.
     .EXAMPLE
-        PS C:\> # Create a configuration set with an RBAC scope (Cloud only)
-        PS C:\> $Scope = Get-WEMRbacScope | Where-Object Name -eq "My Scope"
-        PS C:\> New-WEMConfigurationSite -Name "Scoped Site" -ScopeUid $Scope.Uid
+        PS C:\> Get-WEMConfigurationSite | Where-Object { $_.Name -like "Test*" } | Remove-WEMConfigurationSite -WhatIf
+
+        Shows which Configuration Sets would be removed, without actually removing them.
     .NOTES
-        Version:        1.1
+        Version:        1.0
         Author:         John Billekens Consultancy
         Co-Author:      Claude
-        Creation Date:  2025-11-06
-        Modified Date:  2026-01-19
+        Creation Date:  2026-01-19
     #>
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    [Alias("New-WEMSite")]
-    [OutputType([PSCustomObject])]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    [Alias("Remove-WEMSite")]
     param(
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Name,
-
-        [Parameter(Mandatory = $false)]
-        [string]$Description,
-
-        [Parameter(Mandatory = $false)]
-        [string]$ScopeUid
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [int[]]$Id
     )
 
-    try {
-        # Get connection details. Throws an error if not connected.
-        $Connection = Get-WemApiConnection
-
-        $UriPath = "services/wem/sites"
-
-        # Build the request body
-        $Body = @{
-            name = $Name
+    begin {
+        try {
+            # Get connection details. Throws an error if not connected.
+            $Connection = Get-WEMApiConnection
+        } catch {
+            Write-Error "Failed to get WEM API connection: $($_.Exception.Message)"
+            return
         }
+    }
 
-        # Add description if provided
-        if ($PSBoundParameters.ContainsKey('Description')) {
-            $Body.description = $Description
+    process {
+        foreach ($SiteId in $Id) {
+            try {
+                if ($PSCmdlet.ShouldProcess("Configuration Set with ID: $SiteId", "Remove")) {
+                    $UriPath = "services/wem/sites/$SiteId"
+                    $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "DELETE" -Connection $Connection
+                    Write-Verbose "Successfully sent request to remove Configuration Set with ID: $SiteId"
+                    $Connection.ActiveSiteId = $null
+                    $Connection.ActiveSiteName = $null
+                    if ($Result) {
+                        Write-Output ($Result | Expand-WEMResult)
+                    }
+                }
+            } catch {
+                Write-Error "Failed to remove WEM Configuration Set with ID '$SiteId': $($_.Exception.Message)"
+            }
         }
-
-        # Add scopeUid if provided (Cloud only)
-        if ($PSBoundParameters.ContainsKey('ScopeUid')) {
-            $Body.scopeUid = $ScopeUid
-        }
-
-        $TargetDescription = "Configuration Set '$Name'"
-        if ($PSCmdlet.ShouldProcess($TargetDescription, "Create Configuration Set")) {
-            $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
-            Write-Verbose "Configuration Set '$Name' created successfully."
-            Write-Output ($Result | Expand-WEMResult)
-        }
-    } catch {
-        Write-Error "Failed to create WEM Configuration Set: $($_.Exception.Message)"
-        return $null
     }
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCt5U2WauXPKA0r
-# SxEujVhj0BVM1mVNC3U8Osxcl7YEs6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBYeUKuHrJGn13r
+# kvVKpTObV9/7CKsn00KbCFQTWsp5yKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -261,31 +248,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBeT7/TFGWiKIdSL0qqROEPuvgZhz4ux/BBqYFlKhXD
-# aTANBgkqhkiG9w0BAQEFAASCAYAw82PgcOcrKfBRkRkUmJ91w2YGvIO+bv/kVxZv
-# qvvk4cWdx2P1C9dhidoxzmunnysGH65zzrAiXje/8nxdV/lWyzx3TvqTL/goCLcS
-# rCPJEnX2xjgiXOf8daawy/OPNfKlKEkShbGUYvCkWwLkzap2t9w5of0YzoWYwrQo
-# Y0EiglbXoGlnXuYQWDl0tUKQPJZvI1kR2sNzcvrNQZJtGz5e8I4B3nVB0YewkkzM
-# kvgWgdo2Gg/nRI2If5hv1qBj6quO7bDqz+1ngytn3ft8bVBCVBk9haQbL3bMmlBC
-# eISVG90V5dcHTe2tdToavnovOb+C/Izw/xPqc1dlOR70ZuRNIBpIQiTWDeCtS4Ry
-# fAcEIFAAKmc7zie4zHZ0lF0BWAZyVL3ftvC7Mceycn3EnWL1wxq0+6efWWYD5M1G
-# hsHHI+3fhr7mDhxBREJy6qeC4RJ3P3zyTFFgv5FUbJadsI585eXBqv2s0WfvbyGP
-# QtxyGXQnJxsAXmC+1usVI8utvwChggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCCUbct12Mt/FINCWzTLO04pVWRWo97sCbeM4LXe4lT4
+# czANBgkqhkiG9w0BAQEFAASCAYCzYJ/AObv+J0T63pdFFF2GTI0Wvw9+OPoOjomY
+# aVGpaI9SDy6ZIB5WxGcY/+P9B4bucAxORif57idIpqOfEt1B5jrnKXDrSBPvz9gs
+# vLI4YvwC5ziRotxC+62ZagLRA+S6JqGyH0HxCzcU7xFNXBTII9AvJ9hMqYIZJ8ZB
+# JjY7AM/MDaEQxsOs3ICkjXmVWz0WIRPE3C2sGkRv9teZQNllN6vyVFj2ryytn3DV
+# HrjVejmbN+zMqmy4/I0hrK0p7w+SHqT+dEvrbNtkWg8p2oCGjTPx1Gw6dff0F19F
+# F/N6TOVdY/d7R/SrSslkeew1NyPLbuSRDQK870dtiJ7IpZnPp66B8THyrSGeAyYO
+# jlfHJQJ9aI4Ae3BWfeQDA+2OgRXU7AFq3VQb68uChmcYWKRTDMwVvpJHTq2grfAh
+# xunC7gvLF1VEgeWM+UKtKxx/MXvCDtal5jA/y7Yqu+blbdZbnOFC3WElDwFfHhq/
+# y1sFzwmezLTn/nePWuCs22vafVGhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODE4NThaMD8GCSqGSIb3
-# DQEJBDEyBDBU3r6GO055f4hRgTEvwNo11IHOM7jkD1saezBtJW+3+nTCiN/AtI6T
-# 2z+bv+I5T3YwDQYJKoZIhvcNAQEBBQAEggIAqlHu2WByuqh6KHb+iw/0YGXe6EC+
-# umhPurilK6/j8NB0ceFvkOYvq65C8OtIP0z5sw8nPT70/NTeC8IU7YsLtdH6x4gE
-# K4KDawaU8aCFiVhT16iSHD8myIV+zgJ2bi4LRaXqCRoS7dYsTI25YAWoAfIhK61X
-# ByamsCIl5CUMUYEcI74g7nj+WZbOGE6F6CykcsdA3BaQyBy1l1Hb4ATuRNwLJyb1
-# 2L2JGvWv2IfEgw2Lz0ZBP90aQJddWRzcosZZITY9zJ+r7YjZM1tG9eOxoaCXVOyv
-# 1Tq9Wv4gyehH15FyGEC80xcthxwN79TgqcUFGoowxMMpVVe6MioVIGK5z7uCkzdz
-# PdjD25CqwKPAvkbD/K2xpHQQ63njSDtzChjEP3Evchdf+XemRjAFZuCMC1rqKqOV
-# ajqDL/Pi+PY65M2VWV9Ttl0RDZ5AfOU23byXQHV+zPktI+D7xqNHy4xmGW5Ydhxf
-# ONoxDYfvvtkYIVToVlQeW3ZTOGrgL7xg7FEswADsFQRa0pbc5s4x92mTY6SEKEn4
-# zjgGG/nPDinC5Ul+Bx240bjN610upBz0hmY160iYd0L7i+z9YS1Mbg0UdmtesIWV
-# +pblMkrHir2GSLVIdU+ylqfFRCHIzDGsdbQQ0I9Z1vhOZKHM6WR9JzKH5QuMvrRu
-# n8W0jxTFAmTsWTU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODU2NThaMD8GCSqGSIb3
+# DQEJBDEyBDBY+N9w/a3PQUCxQvsdq5PQUJl47jvhDWbQJaF2Eaobi9ZoYuepBlB2
+# 1+mRYQb83MgwDQYJKoZIhvcNAQEBBQAEggIAGEDNg4EOpN6eBXsFQbwFTdlnXn+E
+# FW8MHaFUXrdenMRw1HcUrqp5hHso7vBWbaUCodUCcb+k7Q3ZH63pFSGMvVydR97z
+# tgnkuivm9jPNd3tcd4U1IIEaO57h57rzy6elrgDgvn8r2zorGmGoEV5b3ye/Pwp6
+# YBCLlU/shE5fjKk9xenSdCyGwZKVovOlKceqI3xXa5OOiSlRIPJZkNO2zxKzBSGt
+# BbJiME9Cqsx0Seo0zqSD0k55zutsT15O40AFyire8WOljdolY1QDoxtgCdPs938i
+# 29A2uNVrV+k268iDE4z0NGbZ26E5VXqqeUHyHAKoMhTZAfzvW+Ml1sOs6v1knzih
+# iN1bfnOtPtjgeRlzSwy/w41Tu2s60JraKKtDQ6G5cJ0Ull3y4Ptr/u8DOr+Ac/uD
+# 9rpiK0Xy9rAyj8wnKnQKN9pGbYE2fRXbq0RhwUA3eBsY6/L+4gNcFfNjwQyL5iIA
+# YKxKim4eT2um1z82lbvlNqN9uUTCePI25nxc5r3ZYWKPdGTFZj4XqKNlJrRFpyZT
+# 8nuoRNn+N/vENyhhIi9QY1A64YY+y85Itkb0W3j9XH3nsofC/qgbF2qQVh68/u/x
+# a+cso9yjlfbrEktUUWQ/aUI4MACha07aDAUZB2EGO2SZ5a+QfylZ+2uTQfqaWypu
+# xZn3klMTw8G7R0Y=
 # SIG # End signature block

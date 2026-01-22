@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 
 # Define paths to public and private functions in a more robust way
 $PublicPath = Join-Path -Path $PSScriptRoot -ChildPath 'Public'
@@ -27,7 +27,7 @@ Update-WEMModuleConfigSetting
 # Explicitly export ONLY the public functions to the user.
 # The private functions remain available inside the module, but are hidden from the user.
 $ExportableFunctions = $PublicFunctions.BaseName
-Export-ModuleMember -Function $ExportableFunctions
+Export-ModuleMember -Function $ExportableFunctions -Alias *
 
 # Initialize module-wide variables
 $script:WemApiConnection = $null
@@ -58,8 +58,8 @@ if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBKkO8LOO7cKBqU
-# h/A/EVNYhDDn8HOnUcdBTR3avlj+taCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCALlImx/64mvBP1
+# qa74IQwpLCErPC4n8y44UrwnACMUeqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -235,31 +235,31 @@ if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCCYR6Rzi3MTLK1nzGgM3kHTXFrTjN/jmVsc+sCL28op
-# IjANBgkqhkiG9w0BAQEFAASCAYB/2sTueRORGMkVi4yuQ71YANemEkcgSQ7watfu
-# QYtoldNr3IJ5UQrwZdBoDO7g6rYHC7zT4CEUMhqXUaw4yUarFBX3p2zxyyX/b+6/
-# HHHD5uN1pBonC11divPLIdonnjXd4kiurm9pi1WeVn/Bh+dtiHgTB+y1ONViUvxF
-# LKHtnAnkNmy1nbQ3vMl5kdZPemzSCB6urryKTbw/+munjozVIUAuH+B5sY27zmgm
-# Wd9aa+wvvW2pe3f84CAMAYyMQeC3YV0NPIqZREgEqrepta7KJVogaIpR/0VHM6Q4
-# VJ+9i++eurbfaprrXaRjMlmg1ufzP3M/fodi9TfbwDsUVM7xpNT7CrWC4YSTjjYj
-# unVyaAZOfSdqOeBHw/QiGrx5/T9zdV/JqkVxEiQtp9g8AMWiOYcCrqkejzJgQgM0
-# NtCHkjOXNsB9m9NYxTHSnkPHhi48jj0iyzrfbJNeU4Fp7eS4jWsy2NLkN1MzLF4m
-# D3hmTswxJtW9ekGg9V5bTJZo5xmhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCA+UfvOBMdQUMGqSiT+pzUKw8v5fssPId6oLU++oYV9
+# bzANBgkqhkiG9w0BAQEFAASCAYCWJ30rnIp9RzejEp9TQR+2djqheOzkIbz7fpv4
+# H1H9MFz5vjGA1Pgp2Acx+aLMn0sm96RAKHTh7SkdYEHpoogRN8k8dS9x+ctNWLzC
+# rAZHraprNma0dEbW3kwENUJbzVmfNgvtxT52/TvBlSu6fjGaSzRpVh0IGBa7oHay
+# wJI5ufRVUxEDhay7//HHky/nMYT2Nh53k1o7yvN3KYibZe+nFZiRVkMM+u7twtsG
+# 74wRVdnmwIEZx/P3U1ZTxNS/zJm6aHdCnWPSoTRhy6TlRVv97QiVU6RBVGgLmmbw
+# e18djjM2U3sSc0lg3W//VMuIHagTj4L6uP/sNAWSOWGloWUFUkzb8Mr5PMK9+ELX
+# 5f4xMvH+VidKvGI0ojDhwq/VZ93/G67pDSeCuDYBjCB1Ki4sBoq3u1GJWyqdTJZv
+# pG04QkPgtBiw/V0M1oap/cmDj4aZhmN8mzRMXa5FEIfse1PYVz6IL/wtRa3ulWaI
+# LxuMYclFozpppABbKuCUhl1i5hyhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMTQzMjZaMD8GCSqGSIb3
-# DQEJBDEyBDC2NOt+xl+0tYSr3GDd78/TRLOLgwwCvQBE8rn+eQSqoQRjQ6nLOboc
-# Es/KHIqZIGcwDQYJKoZIhvcNAQEBBQAEggIAokkjBswEXzKOc0H480/vOe/v5hma
-# B5VwQno5ZdPCJVPZL5DJK7WwXCs+zbPdzqW/SM4ifhm88nGBwi1lNgMMba+pVf0r
-# XelcDr4T+rY8oijiSHRosIeAARLKnMlAJjHBn9lexQoxdulwipNjfrvacChxdcq1
-# ncAoQGJpAtY+P7mHSM3IpyeTdeCVt9WTY6rn+m0EFieIaugw4faVW2nxRs82C/HK
-# IjdgXt2XuJvvkBAaCmZVM3kCELJKe93E0qiFJiZ4qRNU0A6Gh0CYhbmG1DUcaliN
-# +YZeaS8tcxY5D9bJxSfVVvfixy0L4+/JH4NRKNQVdnLXGoEy4evgb/9UPjGr3Pjj
-# iW8jq8eEnUBRyMm00nXcxCOM6VeOWptnFDG6ZwtE6owGIMe68P+7m1vnQQF1lYpE
-# +JaZbZNuXmed5q5YP645/t5jayu7pHvGkQUeleTfRzi/NRzbnc9QHYNCpt6n9Vho
-# 0CZPCpXwAuyIiTxksemBre71djjWzrNuyhfmVY3m7OaL3FN8T0Yn8EOY+LHsNP1g
-# v2zPw1KRlpA8XrXSW9GUL66as17pubGo9kkmpzRIXXBBAjAHLg6Px2fDRBTCKju2
-# ePC15I4ix2LMuxByb88Ji8XxAC+dNEY5/Gf87RYjarhEHHJzPkbXyrJHhEIxe9ZP
-# 0uWUyUpO7vpJGRE=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODIxNDBaMD8GCSqGSIb3
+# DQEJBDEyBDDTyFvgaaI2bOxJvEjGvtpL1sHNoW3EIA1uoZEZIMxQDOy5Mw9FXY5i
+# qd4onnM0hBEwDQYJKoZIhvcNAQEBBQAEggIAUskd9AEzqkKER+uqxAD68cmveQl/
+# 4arlWPWnkhZIC57IllwCOkL3Ak+wwmKsczIYR5laFeCWTu0Lnb9EPGBqA7VOV6kA
+# 596nMN5+Ctaluhn9iM+iJpOpy2aVSrrqL/m/Wm4pH6S6cFpiIJy2L2dQp38ZSRTp
+# UzEkFEuLzp9LPs3D4HGterx4CL+ZRquJahjjWUMiBwoM6PdxcyOPSlVqeM+RF+b2
+# qlybc8235AQW95K/CQxkPquThBr6OQBVyoxA2uqTu6DcWB8IrxkgMaqoeqCwlwMQ
+# v+F+WNxSO3fbj7CH075VgaNfoc0DetdbEwMdbsTniAlKJ33us4VHufNiW0zBT1Js
+# 6rqeq4t/a/fGog3fG255UDicozyW5rlYNR5NaCOikPCNW2curkU6at+fXf2KZvnh
+# S99tMv7vN+RFhArAXEm2rQ/5Aqs/GspP+3OngB4Oc8YQzDZrqB8vKkiMbSjl3L8R
+# fLGG1p2KDlgwyX03CkAFNwxOKA/Na05uoqeD23nrylIAz3NRw1H96/tpC2LRogMa
+# rLqRt4n5htFiBZyZWvuupOZbIl2aBC1INLBPrcHYvQaX/Ktcb3FjQzSHZNGSSdzI
+# vT7eh+sIAakhu77OjoEeipUqDuzEI3/cHyqhbG/4GjslCWe+aJQbN0+rO1pt8Hmw
+# 0mUsMD3TkDKzx6Q=
 # SIG # End signature block

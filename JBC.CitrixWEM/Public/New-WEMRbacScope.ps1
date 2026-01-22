@@ -1,48 +1,39 @@
-﻿function New-WEMConfigurationSite {
+﻿function New-WEMRbacScope {
     <#
     .SYNOPSIS
-        Creates a new WEM Configuration Set (Site).
+        Creates a new WEM RBAC Scope (Cloud only).
     .DESCRIPTION
-        This function creates a new WEM Configuration Set (Site) with the specified name and optional description.
+        This function creates a new RBAC (Role-Based Access Control) Scope with the specified name.
+        Scopes are used to define the boundaries for administrative access in WEM.
+        This function is only available for WEM Cloud environments.
         Requires an active session established by Connect-WemApi.
     .PARAMETER Name
-        The name for the new Configuration Set.
-    .PARAMETER Description
-        An optional description for the Configuration Set.
+        The name for the new RBAC Scope.
     .PARAMETER ScopeUid
-        An optional RBAC Scope UID to associate with the Configuration Set (Cloud only).
-        Use Get-WEMRbacScope to retrieve available scopes.
+        An optional Scope UID to use for the new scope. If not provided, a new GUID will be generated.
     .EXAMPLE
         PS C:\> # First, connect to the API
         PS C:\> Connect-WemApi -CustomerId "abcdef123" -UseSdkAuthentication
 
-        PS C:\> # Create a new configuration set
-        PS C:\> New-WEMConfigurationSite -Name "Production Site" -Description "Production environment configuration"
+        PS C:\> # Create a new RBAC scope
+        PS C:\> New-WEMRbacScope -Name "Production Scope"
 
     .EXAMPLE
-        PS C:\> # Create a configuration set without a description
-        PS C:\> New-WEMConfigurationSite -Name "Test Site"
-    .EXAMPLE
-        PS C:\> # Create a configuration set with an RBAC scope (Cloud only)
-        PS C:\> $Scope = Get-WEMRbacScope | Where-Object Name -eq "My Scope"
-        PS C:\> New-WEMConfigurationSite -Name "Scoped Site" -ScopeUid $Scope.Uid
+        PS C:\> # Create an RBAC scope with a specific UID
+        PS C:\> New-WEMRbacScope -Name "Test Scope" -ScopeUid "4e5c7352-120f-4c0a-8728-32b75c3826aa"
     .NOTES
-        Version:        1.1
+        Version:        1.0
         Author:         John Billekens Consultancy
         Co-Author:      Claude
-        Creation Date:  2025-11-06
-        Modified Date:  2026-01-19
+        Creation Date:  2026-01-19
     #>
     [CmdletBinding(SupportsShouldProcess = $true)]
-    [Alias("New-WEMSite")]
+    [Alias("New-WEMScope")]
     [OutputType([PSCustomObject])]
     param(
         [Parameter(Mandatory = $true)]
         [ValidateNotNullOrEmpty()]
         [string]$Name,
-
-        [Parameter(Mandatory = $false)]
-        [string]$Description,
 
         [Parameter(Mandatory = $false)]
         [string]$ScopeUid
@@ -52,31 +43,28 @@
         # Get connection details. Throws an error if not connected.
         $Connection = Get-WemApiConnection
 
-        $UriPath = "services/wem/sites"
+        $UriPath = "services/wem/rbac/scopes"
 
         # Build the request body
         $Body = @{
             name = $Name
         }
 
-        # Add description if provided
-        if ($PSBoundParameters.ContainsKey('Description')) {
-            $Body.description = $Description
-        }
-
-        # Add scopeUid if provided (Cloud only)
+        # Add scopeUid if provided, otherwise generate a new GUID
         if ($PSBoundParameters.ContainsKey('ScopeUid')) {
             $Body.scopeUid = $ScopeUid
+        } else {
+            $Body.scopeUid = [guid]::NewGuid().ToString()
         }
 
-        $TargetDescription = "Configuration Set '$Name'"
-        if ($PSCmdlet.ShouldProcess($TargetDescription, "Create Configuration Set")) {
+        $TargetDescription = "RBAC Scope '$Name'"
+        if ($PSCmdlet.ShouldProcess($TargetDescription, "Create RBAC Scope")) {
             $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
-            Write-Verbose "Configuration Set '$Name' created successfully."
+            Write-Verbose "RBAC Scope '$Name' created successfully."
             Write-Output ($Result | Expand-WEMResult)
         }
     } catch {
-        Write-Error "Failed to create WEM Configuration Set: $($_.Exception.Message)"
+        Write-Error "Failed to create WEM RBAC Scope: $($_.Exception.Message)"
         return $null
     }
 }
@@ -84,8 +72,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCt5U2WauXPKA0r
-# SxEujVhj0BVM1mVNC3U8Osxcl7YEs6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCB82Dt8BAycPy5x
+# Nk0AKxmpGRePDMwMM3vTiE3yHVQCHKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -261,31 +249,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBeT7/TFGWiKIdSL0qqROEPuvgZhz4ux/BBqYFlKhXD
-# aTANBgkqhkiG9w0BAQEFAASCAYAw82PgcOcrKfBRkRkUmJ91w2YGvIO+bv/kVxZv
-# qvvk4cWdx2P1C9dhidoxzmunnysGH65zzrAiXje/8nxdV/lWyzx3TvqTL/goCLcS
-# rCPJEnX2xjgiXOf8daawy/OPNfKlKEkShbGUYvCkWwLkzap2t9w5of0YzoWYwrQo
-# Y0EiglbXoGlnXuYQWDl0tUKQPJZvI1kR2sNzcvrNQZJtGz5e8I4B3nVB0YewkkzM
-# kvgWgdo2Gg/nRI2If5hv1qBj6quO7bDqz+1ngytn3ft8bVBCVBk9haQbL3bMmlBC
-# eISVG90V5dcHTe2tdToavnovOb+C/Izw/xPqc1dlOR70ZuRNIBpIQiTWDeCtS4Ry
-# fAcEIFAAKmc7zie4zHZ0lF0BWAZyVL3ftvC7Mceycn3EnWL1wxq0+6efWWYD5M1G
-# hsHHI+3fhr7mDhxBREJy6qeC4RJ3P3zyTFFgv5FUbJadsI585eXBqv2s0WfvbyGP
-# QtxyGXQnJxsAXmC+1usVI8utvwChggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDZXs05pP7dE0G0JKDLbEs2blpsau6GEDVpMX/mnH/0
+# JTANBgkqhkiG9w0BAQEFAASCAYBNfWJqrTwLtkJivOo8qV4GXltPNdAf5R9yEtb3
+# y2/CV8cwuwKmxb12LjZbwyn0V2CSVdegjvlU3RBaN6viWtOD1Sv27Xf95gy4MEti
+# ZB5uvITp9d6IEK0TbRYLOEd+YNfzL0FFmUlnk1cuz9dPGkd6Xmm1ZpiwFQ1sKEuS
+# sCJ/mEW9iqyoz3cH8huqeUg/Z2xheQCBX3ndsoapN1X6Homydkoa/RSIr+jdyvhm
+# chn7UyAbUj8Ctix/RoV0DakOkuBfsE/loMJEXVJWjivT9T7LSaOsyw0g5OzhXiRT
+# 7CNQZrYKcrxugsVI5M9dUQdfMerXV33zTDy5A3Rnz4Jicwv3fOv3AoUrfnya5pC0
+# XJsJW4oME4Vgp6MWccJAG5g19kVzhHyt0mgYwhLKbfIn4w34NCGxzAlMRNiSfQ8F
+# VWrpbyTAMEw0Oes8tbR9j5fy23kqj6R+umP5aahjTfCLN+o3kLlXVCBVpKl6uUWW
+# A5vAatgkDDslWinglVOvpbKcmA2hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODE4NThaMD8GCSqGSIb3
-# DQEJBDEyBDBU3r6GO055f4hRgTEvwNo11IHOM7jkD1saezBtJW+3+nTCiN/AtI6T
-# 2z+bv+I5T3YwDQYJKoZIhvcNAQEBBQAEggIAqlHu2WByuqh6KHb+iw/0YGXe6EC+
-# umhPurilK6/j8NB0ceFvkOYvq65C8OtIP0z5sw8nPT70/NTeC8IU7YsLtdH6x4gE
-# K4KDawaU8aCFiVhT16iSHD8myIV+zgJ2bi4LRaXqCRoS7dYsTI25YAWoAfIhK61X
-# ByamsCIl5CUMUYEcI74g7nj+WZbOGE6F6CykcsdA3BaQyBy1l1Hb4ATuRNwLJyb1
-# 2L2JGvWv2IfEgw2Lz0ZBP90aQJddWRzcosZZITY9zJ+r7YjZM1tG9eOxoaCXVOyv
-# 1Tq9Wv4gyehH15FyGEC80xcthxwN79TgqcUFGoowxMMpVVe6MioVIGK5z7uCkzdz
-# PdjD25CqwKPAvkbD/K2xpHQQ63njSDtzChjEP3Evchdf+XemRjAFZuCMC1rqKqOV
-# ajqDL/Pi+PY65M2VWV9Ttl0RDZ5AfOU23byXQHV+zPktI+D7xqNHy4xmGW5Ydhxf
-# ONoxDYfvvtkYIVToVlQeW3ZTOGrgL7xg7FEswADsFQRa0pbc5s4x92mTY6SEKEn4
-# zjgGG/nPDinC5Ul+Bx240bjN610upBz0hmY160iYd0L7i+z9YS1Mbg0UdmtesIWV
-# +pblMkrHir2GSLVIdU+ylqfFRCHIzDGsdbQQ0I9Z1vhOZKHM6WR9JzKH5QuMvrRu
-# n8W0jxTFAmTsWTU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODE5MDFaMD8GCSqGSIb3
+# DQEJBDEyBDA32xGNfG9Zh8hhWL+FyROfmNvF2HlGgRH4bQ+Jb295yAe/X946rfWF
+# YAa6yx9UffQwDQYJKoZIhvcNAQEBBQAEggIAG7W+jpBdgYw16wKMTuDaVneEcN44
+# UFKwLF/KfgwTnSqQ1mnioBG+7D5bzEbPiV0xtcOnlX1hH4zhjZwszL3ciCrypE9c
+# FPbv5GKAP4qHVVFIc8SkIe9KOVZZOHQ3poJkpZfJnkWjWg1DEQ1TeLqVRuUD1Yx3
+# oewy0aypFialL+Fg46AAx7Z1WQ8YTc2TaJ55j23I7GhwRtwXarteQsMvKho9Bmpn
+# JNxR7YMDevMH33cZVQ0kewot3A/sgcPujIyEUt5kLoa29ZUoRr1qVaWrvkeid43G
+# zrbRcS/extvhQQ3ebYG+mUQucjR6bldLvRFRL7DVSI2ZWCnXDeReTqP+AL/YksSz
+# vkelYtdMxt1zVcN+UmhA+qznXFHI1t0aDmozrH1FOzdm5MU0ozzpSdeYfg3H9eDP
+# R2C0o+Krw8MLdTIUFmMxmiC/UN295a+g7b1dp6Wn4dL8kiCsl6bcx4KaN21c3Ksb
+# 3bf+HVT/FPuYVvtEF/6FAkKTL8fo/jHhcvZQ+4/N9cDcpgiiQ7PP2G9LzqjRn/b2
+# WLMcRgIX0KbKuiRr7BKAhcvrKWNFvF7GeSEIvBXTfaKGkT1gRPa/Zr/ryUW2U3TW
+# IdHECvUriRk8FNJ90+XGx8F5jgAmfFAcCapnidM0Es1RMk5q6wk4zZtm3rGxOnH3
+# //hKwW/rqx+LejM=
 # SIG # End signature block

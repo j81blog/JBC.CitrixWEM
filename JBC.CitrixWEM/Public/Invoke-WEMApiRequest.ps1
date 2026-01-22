@@ -1,4 +1,4 @@
-function Invoke-WemApiRequest {
+﻿function Invoke-WemApiRequest {
     <#
     .SYNOPSIS
         A private helper function to handle all web requests to the WEM API.
@@ -63,18 +63,18 @@ function Invoke-WemApiRequest {
 
     # Determine the source of connection details based on the parameter set
     if ($PSCmdlet.ParameterSetName -eq 'Manual') {
-        $ActiveBaseUrl     = $BaseUrl
+        $ActiveBaseUrl = $BaseUrl
         $ActiveBearerToken = $BearerToken
-        $ActiveCustomerId  = if ($PSBoundParameters.ContainsKey('CustomerId')) { $CustomerId } else { $null }
-        $ActiveWebSession  = if ($PSBoundParameters.ContainsKey('WebSession')) { $WebSession } else { $null }
-        $IsOnPrem          = if ($ActiveBearerToken.StartsWith("basic") -or $ActiveBearerToken.StartsWith("session")) { $true } else { $false }
-    }
-    else { # Automatic
-        $ActiveBaseUrl     = $Connection.BaseUrl
+        $ActiveCustomerId = if ($PSBoundParameters.ContainsKey('CustomerId')) { $CustomerId } else { $null }
+        $ActiveWebSession = if ($PSBoundParameters.ContainsKey('WebSession')) { $WebSession } else { $null }
+        $IsOnPrem = if ($ActiveBearerToken.StartsWith("basic") -or $ActiveBearerToken.StartsWith("session")) { $true } else { $false }
+    } else {
+        # Automatic
+        $ActiveBaseUrl = $Connection.BaseUrl
         $ActiveBearerToken = $Connection.BearerToken
-        $ActiveCustomerId  = $Connection.CustomerId
-        $ActiveWebSession  = $Connection.WebSession
-        $IsOnPrem          = $Connection.IsOnPrem
+        $ActiveCustomerId = $Connection.CustomerId
+        $ActiveWebSession = $Connection.WebSession
+        $IsOnPrem = $Connection.IsOnPrem
     }
 
     $FullUri = "$($ActiveBaseUrl)/$($UriPath.TrimStart('/'))"
@@ -103,11 +103,11 @@ function Invoke-WemApiRequest {
     }
 
     try {
+        Write-Verbose "Invoking WEM API Request:`n$($ApiSplat | Format-List | Out-String)"
         $Response = Invoke-WebRequest @ApiSplat
         if ($Response.Content) { return $Response.Content | ConvertFrom-Json }
         return $null
-    }
-    catch {
+    } catch {
         $ErrorMessage = "API call to '$($FullUri)' failed."
         if ($_.Exception.Response) {
             $StatusCode = $_.Exception.Response.StatusCode.value__
@@ -131,8 +131,8 @@ function Invoke-WemApiRequest {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDtguHNMPp/xl3C
-# xFGXhOMLi/tCOSdkL3kE3NptOJGf/qCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBn7blE3diOoHcs
+# rtuLY8kJeYokujQjYx6lvIOt8GPjrqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -308,31 +308,31 @@ function Invoke-WemApiRequest {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBqyy4N57xbuqnVyRVB3DGzUYf9NRkMwrRm4H274N0y
-# MTANBgkqhkiG9w0BAQEFAASCAYCvBlxpu3G678AiMP9Bd2+b9sNQ1J7QGDHA9e1n
-# H9af3yfEKKskUfQbCI4s2edwPw6z5DTENf6It7/3Eome15EzqJWij8m+D1pMD8vD
-# xNpW6n1aZVKWQ2IGF2C3k3YgllwOzzHyU5qPuMG8gYnhJ95nL4/Ck3A2Cy098cSv
-# LjeJGGBpUPLtFehmNef3Oxz9DvCH1OaGmfcPH3Z3c9wrmG7Kek2ziwF2AD4rozWW
-# KmLLe2TMtO/8uygWhffRzpGt1jNPLd4UWvZVqmdkvGoJKTMq+VSubhaFY5TB/gUD
-# erYlN2d38GI1HMl40ZiikVM17uHmqzgbtX+LdeNEJu7pvKXaJQ6RJqmFmB0ILT2s
-# CAGN3yBwTeFwll+tuI0uoloBKC8bSD1HR8uRGhMcZdBwOKkTQen/3Qi6IrpapG3i
-# 2Mx2PMygjL4Wd3Lyge+irydbt2r66unvb/ZA5tJMM0OQvEW6aNPBrNVNrQaU26Db
-# Kse0w6cHwBHQ3v27tVXsj1m1iU6hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBrPq/fwQlzv1gIetK5Crp+0Y6zV76oZtErSq84FXBS
+# MDANBgkqhkiG9w0BAQEFAASCAYBCguBXsKV9u7FKREVpOYipgpmwTZN4A0XJ7xQV
+# xok76LKnjtExzS0MUd/Ufd6NwQDvCr+E/aOSkiQRR8TZ62OgfFh3K+0zxWEM4PHI
+# WyY2iuvYaT17004K9+US4HxWz+d+DI9Zh6qO7J0WnyHcb3LjIOsdwdr0ni4njaiv
+# cWj4aTSfJu3v/v6CIdHg8nr7sg3xhZ9yZFrKIAgCJYXdA+xYgnzwn6IJgH0QoQk2
+# G4ctOHblXiYNSpSiMpYEEz86t2up1Zix5CAbD79Qk2XHwYar1IR5F7aB5jhPGwVE
+# lprVMAa52dGsRKubWn8Jaxk3GPpZutsLhAKqSae9X1M0vMPduE3+/c4LwKnrnt0l
+# 4XPf2ivvJvdoShC4Bm26BJ1aK+48GJ2B7hayNBegKG3nDuKjX0NC3XoTGHQ8sh74
+# QAUgBXR7UeyECLiQ24EoLf6EgrYlF7NHNwfFuWe76/zNxGEvBR8bAXwrT5NPEE8B
+# j8QRNO2+PdTNfd4EXT28lKGDBf6hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU4MTBaMD8GCSqGSIb3
-# DQEJBDEyBDD13IRyPM1xMwj5TAXPBAlGlgEWO4dN3HJEeJ7xH7zb0w//fAKS6XPf
-# 7jlQKP1pf60wDQYJKoZIhvcNAQEBBQAEggIAXPWjaKwDD1FqHoFVene+KxiwrN4g
-# 3DIx5eAVSwdQOjXXzauUCbIBmK3zIyYqcx1RKggspH3a58ytJcjXmV9aziMWg2jU
-# +FrWvSOZYuJqSvpU/Q9yqdpGKSiO52HDT/CaUWY8A/mAITcnCzp7ESQ+BvmPns95
-# oFsZqwdEH0Ex+uOfOCrrkXhHQ/E5jgWpxfbgw+cGdEUxABwVYy/0ovTBcB7KHKSe
-# vPGMSRafj3zn2phSk9DWKV6Z0pjDi790pecGWcrZfsGLtATPOTHqx6oJsns8OByy
-# my1D5SRn+dSMpCWrf2SSIPRWdVK6dvcYN2nWJ3zU3J2XECGddL+xKqAeUaq3bzZC
-# JZFmLOWm1Jo23uhMMqtPViMuvzKHY0MRphmaeWpRkpZhA3oQ7CurqBGY00N9wbQa
-# AmXa1MmGtXTxuV5w4wG7Rbyfwei4GUouEBebkmQgFqla//CA04CftvYfIt6nE8Cw
-# G25qBs3NEtqvpu18iusWIU9MMX+VrPo7P+JsVuu6rQHlF7cm542O+cZyEENqzBcv
-# I2Vyhe4FGicuGd5Jpck/NFCi5xKtS6DJVAPQAlvKQMwsbzja9i1alHjlRlpWpmSQ
-# V5MPoOnlCs9FNdJEJGWAYL/JCDTNHvCDNj6IUKG98SdZEoMoBKNQGgCtgMZ4Yet4
-# BD4Wk1dEx1VYa0E=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAyMTMxNTNaMD8GCSqGSIb3
+# DQEJBDEyBDCZJqVUXdpJokzTxDk9RD//yNyxyZSy+OS7JHU+KUyLuAuJU7hMaOf3
+# Hku9sZ6sW4AwDQYJKoZIhvcNAQEBBQAEggIAh3YkGLFtxDmJZnkhoimtXlrZix6z
+# tEHuAJ7rqi+zkXTa4AD2Qyl8xAynwU5cZSC4FHYrH6iHcaOkgHuoQK0eRUZFMtyT
+# 1bpIee+nbGSuQf35krfS3lZ2H6VSdnUeqyjwyOhtWc8052TnL3GNTiBYdi7OobzW
+# B0aXMbz8ioOWAJ1OaM7a2HoEqy4WHMITgTunKusr8efSX0MD0CzQzuxbaJQbrknF
+# fQnMx+/s67/khYMCRjVRCsKtUsHDkZeq14w1qDXoUM90EHsgwKM+ZueygdoD2vgN
+# 4xFnO0gQuI+xfbdXMSLXv9m+pulThXw9bYR9Pzkj6jafl+UPkpHGtq5yrVFO4znU
+# utG38LPNSpAjw+MxCH5kj/iiG/DJM4bpRBeeZVAeqzmS//Jaicxu18jLBn95cdfb
+# ie4y/McNP2TeypNDcgrnJKLndSEVq0cKZTJreVGOjSnKDLV6WBFxdmBzLRT4X/Af
+# KUHb2bz3DYxKkaTkr7AvA1OgP8pkwssRryMycbIkSboJO+1A1Q3rjP6E/VPrgyQ4
+# IQ9KdTDivHJvYylSFMd0nNgpWRfvAWlx0w6Am5dNWOYr8kbVMOUsCsdr7Mfx7VZ8
+# d5MdgS92iQ3kbaTR7/EkZ1fIGhljQem9RucjaVS0zlsKegaJeRaALEE3pG/KiuxU
+# cEcOS+9iDYzcLKM=
 # SIG # End signature block

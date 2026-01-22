@@ -1,91 +1,55 @@
-﻿function New-WEMConfigurationSite {
+﻿function ConvertFrom-HexToString {
     <#
     .SYNOPSIS
-        Creates a new WEM Configuration Set (Site).
+        Converts a hex string (from .reg file) to a string value.
     .DESCRIPTION
-        This function creates a new WEM Configuration Set (Site) with the specified name and optional description.
-        Requires an active session established by Connect-WemApi.
-    .PARAMETER Name
-        The name for the new Configuration Set.
-    .PARAMETER Description
-        An optional description for the Configuration Set.
-    .PARAMETER ScopeUid
-        An optional RBAC Scope UID to associate with the Configuration Set (Cloud only).
-        Use Get-WEMRbacScope to retrieve available scopes.
+        Internal helper function to convert hex-encoded strings from .reg files
+        to their string representation. Handles Unicode (UTF-16LE) encoding.
+    .PARAMETER HexString
+        The hex string to convert (without spaces or commas).
     .EXAMPLE
-        PS C:\> # First, connect to the API
-        PS C:\> Connect-WemApi -CustomerId "abcdef123" -UseSdkAuthentication
-
-        PS C:\> # Create a new configuration set
-        PS C:\> New-WEMConfigurationSite -Name "Production Site" -Description "Production environment configuration"
-
-    .EXAMPLE
-        PS C:\> # Create a configuration set without a description
-        PS C:\> New-WEMConfigurationSite -Name "Test Site"
-    .EXAMPLE
-        PS C:\> # Create a configuration set with an RBAC scope (Cloud only)
-        PS C:\> $Scope = Get-WEMRbacScope | Where-Object Name -eq "My Scope"
-        PS C:\> New-WEMConfigurationSite -Name "Scoped Site" -ScopeUid $Scope.Uid
+        PS C:\> ConvertFrom-HexToString -HexString "48006500"
+        Returns "He"
     .NOTES
-        Version:        1.1
+        Version:        1.0
         Author:         John Billekens Consultancy
         Co-Author:      Claude
-        Creation Date:  2025-11-06
-        Modified Date:  2026-01-19
+        Creation Date:  2026-01-20
     #>
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    [Alias("New-WEMSite")]
-    [OutputType([PSCustomObject])]
+    [CmdletBinding()]
+    [OutputType([string])]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Name,
-
-        [Parameter(Mandatory = $false)]
-        [string]$Description,
-
-        [Parameter(Mandatory = $false)]
-        [string]$ScopeUid
+        [AllowEmptyString()]
+        [string]$HexString
     )
 
+    if ([string]::IsNullOrEmpty($HexString)) {
+        return ""
+    }
+
     try {
-        # Get connection details. Throws an error if not connected.
-        $Connection = Get-WemApiConnection
-
-        $UriPath = "services/wem/sites"
-
-        # Build the request body
-        $Body = @{
-            name = $Name
+        # Convert hex pairs to bytes
+        $Bytes = [byte[]]::new($HexString.Length / 2)
+        for ($i = 0; $i -lt $HexString.Length; $i += 2) {
+            $Bytes[$i / 2] = [Convert]::ToByte($HexString.Substring($i, 2), 16)
         }
 
-        # Add description if provided
-        if ($PSBoundParameters.ContainsKey('Description')) {
-            $Body.description = $Description
-        }
-
-        # Add scopeUid if provided (Cloud only)
-        if ($PSBoundParameters.ContainsKey('ScopeUid')) {
-            $Body.scopeUid = $ScopeUid
-        }
-
-        $TargetDescription = "Configuration Set '$Name'"
-        if ($PSCmdlet.ShouldProcess($TargetDescription, "Create Configuration Set")) {
-            $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
-            Write-Verbose "Configuration Set '$Name' created successfully."
-            Write-Output ($Result | Expand-WEMResult)
-        }
+        # Convert from Unicode (UTF-16LE) to string, removing null terminators
+        $Result = [System.Text.Encoding]::Unicode.GetString($Bytes)
+        $Result = $Result.TrimEnd([char]0)
+        return $Result
     } catch {
-        Write-Error "Failed to create WEM Configuration Set: $($_.Exception.Message)"
-        return $null
+        Write-Warning "Failed to convert hex string to text: $($_.Exception.Message)"
+        return $HexString
     }
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCt5U2WauXPKA0r
-# SxEujVhj0BVM1mVNC3U8Osxcl7YEs6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBfPWiN28jUF0Zm
+# f7O+JxxFYB5SqMl8AHJOUhRuEGOkNKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -261,31 +225,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBeT7/TFGWiKIdSL0qqROEPuvgZhz4ux/BBqYFlKhXD
-# aTANBgkqhkiG9w0BAQEFAASCAYAw82PgcOcrKfBRkRkUmJ91w2YGvIO+bv/kVxZv
-# qvvk4cWdx2P1C9dhidoxzmunnysGH65zzrAiXje/8nxdV/lWyzx3TvqTL/goCLcS
-# rCPJEnX2xjgiXOf8daawy/OPNfKlKEkShbGUYvCkWwLkzap2t9w5of0YzoWYwrQo
-# Y0EiglbXoGlnXuYQWDl0tUKQPJZvI1kR2sNzcvrNQZJtGz5e8I4B3nVB0YewkkzM
-# kvgWgdo2Gg/nRI2If5hv1qBj6quO7bDqz+1ngytn3ft8bVBCVBk9haQbL3bMmlBC
-# eISVG90V5dcHTe2tdToavnovOb+C/Izw/xPqc1dlOR70ZuRNIBpIQiTWDeCtS4Ry
-# fAcEIFAAKmc7zie4zHZ0lF0BWAZyVL3ftvC7Mceycn3EnWL1wxq0+6efWWYD5M1G
-# hsHHI+3fhr7mDhxBREJy6qeC4RJ3P3zyTFFgv5FUbJadsI585eXBqv2s0WfvbyGP
-# QtxyGXQnJxsAXmC+1usVI8utvwChggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDNitoZLD41DDQXYmIKUikhEkCICSxR1QY1PQqB2Xvy
+# oDANBgkqhkiG9w0BAQEFAASCAYAGLzcu2sGiUaaXVlxl8A5HQxB83yVUoBYgtvdw
+# jrUGsBag8CjGR4YggttKqzAzrJDo65GI/t51M7HjFU0TuB4adWpjjjBn+K8dRm4Z
+# lv2DhIQveOITRwPUm3cJ7oRf0Pdj5po9Fnvlz73f0+duSxl5U0dM3KaJhoN3hieE
+# zH6HiyQ6SVGSydTjezFLYCiZwoJab8rGasVYpTIwmvhFIhVzx6if3f7BbpK6b4DR
+# AUfFvxap2mjazz2Jn5x7elsoOS9l/gynqTPOFZcTNQAVuyoL/DVhbabgJGeijqa8
+# hdlX0RQtkrnBOyeOw7Qm/k+6GAfK2E6+ctyohc7M3I16rf2O3CAPO5Gr/jki4PbG
+# 7FWMxvJTEHwahm76qKOtyyvkIfGoe55tlYLxvE0+U0mCSZTkCWL9h4+L7EBVS8K6
+# qSNLgnLaAZw/kMQkNARgJqvWiIdf2TloheryqPwrIXuK8CBuT3Wx3rZDnBQDb0hF
+# soKyKr3At4if6EYG9uUxVoMFBJ6hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAwODE4NThaMD8GCSqGSIb3
-# DQEJBDEyBDBU3r6GO055f4hRgTEvwNo11IHOM7jkD1saezBtJW+3+nTCiN/AtI6T
-# 2z+bv+I5T3YwDQYJKoZIhvcNAQEBBQAEggIAqlHu2WByuqh6KHb+iw/0YGXe6EC+
-# umhPurilK6/j8NB0ceFvkOYvq65C8OtIP0z5sw8nPT70/NTeC8IU7YsLtdH6x4gE
-# K4KDawaU8aCFiVhT16iSHD8myIV+zgJ2bi4LRaXqCRoS7dYsTI25YAWoAfIhK61X
-# ByamsCIl5CUMUYEcI74g7nj+WZbOGE6F6CykcsdA3BaQyBy1l1Hb4ATuRNwLJyb1
-# 2L2JGvWv2IfEgw2Lz0ZBP90aQJddWRzcosZZITY9zJ+r7YjZM1tG9eOxoaCXVOyv
-# 1Tq9Wv4gyehH15FyGEC80xcthxwN79TgqcUFGoowxMMpVVe6MioVIGK5z7uCkzdz
-# PdjD25CqwKPAvkbD/K2xpHQQ63njSDtzChjEP3Evchdf+XemRjAFZuCMC1rqKqOV
-# ajqDL/Pi+PY65M2VWV9Ttl0RDZ5AfOU23byXQHV+zPktI+D7xqNHy4xmGW5Ydhxf
-# ONoxDYfvvtkYIVToVlQeW3ZTOGrgL7xg7FEswADsFQRa0pbc5s4x92mTY6SEKEn4
-# zjgGG/nPDinC5Ul+Bx240bjN610upBz0hmY160iYd0L7i+z9YS1Mbg0UdmtesIWV
-# +pblMkrHir2GSLVIdU+ylqfFRCHIzDGsdbQQ0I9Z1vhOZKHM6WR9JzKH5QuMvrRu
-# n8W0jxTFAmTsWTU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAyMTE1MjlaMD8GCSqGSIb3
+# DQEJBDEyBDDSnm4ZiYDd1V/iXy6wgu73obZhSdUnbpXaJAPrD3yPuBL2fzh99nK0
+# xPq/SukbyJ8wDQYJKoZIhvcNAQEBBQAEggIAv5aR/lroSlfII8Lj55lWg0ZVm4Ew
+# yjZekPxDnmXnijMj58o4ilEiD6xQbsW4pyjIJYryPww/b2HpY6Y9NWrL3bonlyEh
+# rM0+SYrSG9voMY5NS6oIkNQvraUAmnpfp0Z1NV83hgSn3W1WYb2FPQqwvoO0x1tG
+# c91w10oIZ1vCCRNAvq5rZ1K5Cu20uISXYEza5Fj4ZTUJATQaVQKZYuO66u4TQs3M
+# jZHnhTbIpBi3Qel0T8sWvA4KWKfUf5r8Im34RVs666BIrwFZEEwJYXQ8kF5Ntaue
+# qXBviCukrojWOBZx4rBgCSSj3eej6nz4sSfc9hD81wuou0uPOp5yFmLEluHZaSTV
+# f4XW5xjuQbVzQDqa/Vqda7tH11kNNhiYkRB7PibCmY6Lr5okR4pBav9h/uK+wjXQ
+# PivsqlNlSJ6H+00RSGWkQk5Ylc/MTVG7vx3hLb1rIHERn2QmwhE0oE3lTWU//Jhm
+# FvXWCrEK6M9VKoRNNNkGjF5gX+plUNxguUuWcfcQnNTc1d+jspoO77NlqcyLxQFg
+# H1aVJYS24dJRQMW6XBUSF+PKp3163xO7k+96yd7cjH7M27c/cY63yvm9AX67UJ6M
+# Sylxx9Mk+MbnjJjB4V+Vo16xkF7TkGAt22fM3DMfBRDpaNfGtLDbKCsPVbKpFRdz
+# G5g4lHCeEkt713E=
 # SIG # End signature block
