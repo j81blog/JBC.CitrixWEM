@@ -12,4 +12,5 @@ iex (irm https://raw.githubusercontent.com/j81blog/JBC.CitrixWEM/refs/heads/main
 
 ## Available documentation
 
-[Create Applications And Assignment](Docs/CreateApplicationsAndAssignment.md)
+* [Connecting to WEM](Docs/ConnectToWEMEnvironment.md)
+* [Create Applications And Assignment](Docs/CreateApplicationsAndAssignment.md)
