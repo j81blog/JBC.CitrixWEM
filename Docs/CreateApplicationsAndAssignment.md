@@ -6,31 +6,7 @@ This document outlines the process of assigning an application to an Active Dire
 
 ### 1. Initial Setup and Connection
 
-First, the script sets up the environment. It imports the necessary custom PowerShell module and establishes a connection to the WEM API. It then specifies which WEM **Configuration Site** and **Domain** to work with.
-
-```powershell
-# Import the custom module to interact with the WEM API
-Import-Module "JBC.CitrixWEM" -Force
-
-# Authenticate and connect to the WEM Service or server
-# 1. OnPrem:
-Connect-WEMApi -WEMServer "https://<WEM Server FQDN>" -Credential <Your WEM Credential>
-
-# 2. Citrix Cloud (Web Credentials):
-Connect-WEMApi [-CustomerId <CustomerID>]
-
-# 3. Citrix Cloud (API Credentials):
-Connect-WEMApi -CustomerId <CustomerID> -ClientId <ClientID> -ClientSecret <Secret>
-
-#List the Configuration Sites
-Get-WEMConfigurationSite
-
-# Set the active configuration site by its ID
-Set-WEMActiveConfigurationSite -Id <SiteID>
-
-# Set the active domain
-Set-WEMActiveDomain
-```
+To connect, follow this guide [Connecting to WEM](ConnectToWEMEnvironment.md)
 
 ### 2. Define Key Variables
 The following two variables will contain the necessary details to create and assign an application:
@@ -196,7 +172,7 @@ foreach ( $Application in $Applications ) {
         Write-Verbose "Creating new WEM application $($Application.Name)"
         try {
             $WEMApplication = New-WEMApplication @Params -SelfHealing $true -PassThru
-            Write-Host "Succesfully created the application `"$($Application.Name)`"" -ForegroundColor Green
+            Write-Host "Successfully created the application `"$($Application.Name)`"" -ForegroundColor Green
         } catch {
             Write-Host "Error creating WEM application $($Application.Name), Error $($_.Exception.Message)" -ForegroundColor Red
             Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
