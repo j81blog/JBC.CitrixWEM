@@ -1,11 +1,14 @@
 ﻿#Requires -Version 5.1
 
-Write-Host ""
-Write-Warning "**************************************************************************************************************"
-Write-Warning "*                                This module is still in active development.                                 *"
-Write-Warning "*                      Please test thoroughly before using in production environments!                       *"
-Write-Warning "**************************************************************************************************************"
-Write-Host ""
+# Check if module info should be shown (can be suppressed in tests)
+if (($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) -and ($Global:WemModuleShowInfo -ne $false)) {
+    Write-Host ""
+    Write-Warning "**************************************************************************************************************"
+    Write-Warning "*                                This module is still in active development.                                 *"
+    Write-Warning "*                      Please test thoroughly before using in production environments!                       *"
+    Write-Warning "**************************************************************************************************************"
+    Write-Host ""
+}
 
 # Define paths to public and private functions in a more robust way
 $PublicPath = Join-Path -Path $PSScriptRoot -ChildPath 'Public'
@@ -51,7 +54,7 @@ Set-Variable -Name OnRemove -Value $OnRemove -Scope Script -Option AllScope
 #Hide Progress bar
 $Script:ProgressPreference = "SilentlyContinue"
 
-if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
+if (($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) -and ($Global:WemModuleShowInfo -ne $false)) {
     Write-InformationColored -Message "`r`nConnect to your wem environment using the one of the following options:" -ForegroundColor "White"
     Write-InformationColored -Message "1. OnPrem: " -ForegroundColor "White"
     Write-InformationColored -Message "Connect-WEMApi -WEMServer `"<https://YourWEMServer.fqdn>`" -Credential <Your WEM Credential>`n" -ForegroundColor "Cyan"
@@ -65,8 +68,8 @@ if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAG7hfWCiT/yunv
-# iSA/nueXiMqn7i3KKGlppsEl3PUdQ6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBvY4uYNWtPq/Dr
+# tsfoXrprw9kTl5NGm3jZTaAyuNob4qCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -242,31 +245,31 @@ if ($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCCa7JObHyq8/DSL5m/bpycUo1eepyHq1GhP5Cg5bXF2
-# zzANBgkqhkiG9w0BAQEFAASCAYA8x0p7YFRkxQFo6/1ybxZfsd5ywML4Exy+E2Jj
-# Dnj1mGxZgcdZ2Z8jJUfRquDN2KuqnbhlqXzvO0h/TER8MBVb8GABxjDJSt93pL/E
-# J8+Tm8P6QpfvLC1fSL3K/nxmc1x1LvbVSpGEqfya0JIyvDrxN3hj6kBCfQ7gRfl5
-# lzygbTqC+Z2p0nmxKSbC4PoyVdugQDsCG7xLhm6BVGVvY2oRKZ8VBdiiKR4XuuPT
-# Ho9GVuUZiJSXu7cbUo9ERm3K+V6kIoTilITwYpD/L2eheJEz1OCm1ejZZK6COVEP
-# C6ljlbAm3STKZaseIaqNxOYGcxnXI5MfMEJFZddx7H0yKmZ7tTTpdqILrbgQ+sbK
-# amzzaEnP+6hw2gMvAnaJb/EmL/GJOWHHXsA03IB0t0mkAVaiJoS+6aHinbCPmoU+
-# K8xLFQpbGQoLfPBKUaiLfPX9iHl9E1f9m5d0q50vcyLUy5kwXDx2aEzvCmRVa7XY
-# 9lmwyplK0E3BB7pEyt1k8LYPN56hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBZjQxYDCuOJ5/V2AAtInR+9l0druLeTzYIbiYkI3yF
+# nTANBgkqhkiG9w0BAQEFAASCAYBdiVDCe48cxdvWn0n68K74tGiZT5jwzPy3or7l
+# 5374Rw1xvc17WAKY7mYRGWnDk34Z1r4rA8FSTniS4F/RTTB74zwwPl+vWfTJ1mB4
+# AjwpbCVA/duIaTZYYcG9E9tsMUgLaQ449mCfyZQgiuwPPJDCzmEUTp6mGsWDu0kj
+# 4YkVgt1/KSc+bReTgFlxA/J3rVwLm9u1GogGnP/vAe0vvhwsFxBakQJXja0m/Bgy
+# G7kHZP9qMuBP7DOiTJorgW878bNvXjYx+TKde2ww2kwoCMnlhWNOPP9VrAgtVNTm
+# E22nUJWooLEySaxaiFcUQfR7TK+NI9o0SQ1i3UzWk7wFtclBCK9nIDxgNOdlMrLh
+# WZYZYuJ1DUbm7UBeoUiPp77cIyDT66PFOMI1755qhBkfSeBnK9ivsLV3q/9CPnhF
+# 02y/m+A3uw3r3iMa1lIjPgMzS0u4IQr6WLD5GUtn6gHs6YLMhrqmNxeyQwOlljOr
+# Cxg4GJwGhdvzqp0f/IX98a8Xg2ehggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjIxMzU5NTdaMD8GCSqGSIb3
-# DQEJBDEyBDCXnR3UG2bU1nhAlnd6e/4hBHaBL/ZGQxpURMqK6cZOIezpe5kn/wB1
-# dxNqHA6MyXwwDQYJKoZIhvcNAQEBBQAEggIApt0ABl9eTFTRFZXRJaS6hQCVaxf9
-# zMy4YdUvgHYGiUdgmUKQ0lAVGUAjkxbmRJGtCefQgVYK/z0BieTsT8rc7zSINPpg
-# thx6zHCrvBfX+VEeXjZFYCPf91ES1alj/B94mUZyVqyivqGaGzMdWvjvClXHhmv+
-# 1ZFEzi6r6OpCvWCAsbhoikME77qtAiodCIRmGt/HVTxzms4LHqaeihyerK4+/ePb
-# iWjG54+CuAsnShMCYUUfrqzOR+/o7WQKNb3lzmX/TzBHv4brU/asI2syxbhL1uO3
-# snhdKXM1n2rIndIvW8+NPBnH3r9CO/ioQdN7w4O3rJxi5bGLZdOPCn/JwDijypa0
-# xSeL7KnQS5TTV2ULDmnnEldY2YHgGuyalS0HmDkzaxIIqfOJi6TLkPXR28PNRtdu
-# iZtd8odiBl5G6Zn3R7dPzNRGvIIdlO50cQB4D0Jfawis4aJIJ4EGtGQCzEl0mOGb
-# Qw2wKHuOPjUhDp0+dEhNTrDu8PedSOpOdzL0GcrrczvNZgDaWWP89wTHf9NOFE/l
-# 3tpaGKMLrGeHO9w48AxCQNKLH/sozgpcwlWd8pVNlM9VjrbFR/A6VFV929Hf7lgn
-# H2vUvl6HlF4z7v3qrjAbXIAlD7TR18JHJqvuxZuLZZu2a25VhZax/TcgvdUhVqez
-# hYmZV1bJOm8XKP8=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjQwODMwMjZaMD8GCSqGSIb3
+# DQEJBDEyBDA9vMQQuk+AcxsBfg8tuUh08OB5S01JBTqcjPH1yzEzym23+QX+N+o6
+# WMmJUmI46QAwDQYJKoZIhvcNAQEBBQAEggIAY89kNbLUSL2NcbAdmtzi4d/P0RU9
+# gJrfenjkq9E0glOtInUwDNRUnC1Jat3jnFGvvnl9q7+ALwdm13Y2VTP94E0gSnrC
+# lgstEvlNEZ5dn9O7yqD+ghuvBc2tWViGcHRzqPiO8Lfhy2sGFRAuNUbJHd82boks
+# puy5btluiXkePChQOU3Kcaie/+CdebqTWToBKoiH4hNS01fLp4VnhaiVYsBqxqoI
+# UaTd4ATEqZyneCe+kqyP2sDJMJfO6WkOecmnbZUXjmeFLxPbk/tjlPORI5Sn2Fny
+# dQ9EuUX5cNcm/NvWTgIjwj+t11fprVoSzFxBL7T4ANdt0XZKaOJvcFeFeaLgy27l
+# YvPbUNnjprRkqy/YmtFS8wlJcvunrESdYiVioketinee00r44wrNJxAtDL/slt9b
+# iuQyKnbCB144fOmu/incotDo4Cg7pJGE1UftYkBOmmXbLqWCkbhZSo3rZ0o1Bduu
+# Yo0T3AT2wtaluDhoyjfeSiknNinqAHjulLYW5K3EKLDSlBjbT5QDTxJ5X0ynBiWU
+# zzWw1aeNGFdjgqZUZjh6HQd9hVSvpezFhXRolpMfN7c/n8zO2dBHOFdwNbOhO7Fv
+# JrwQ21h1m253WeXRoWch8BiD6+PuXlt6lFp7/ueYAazAI0ztsvHB0ZhUDvJpumt3
+# 43chHt/WmteQLF0=
 # SIG # End signature block

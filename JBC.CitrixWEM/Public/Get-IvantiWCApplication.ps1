@@ -40,7 +40,7 @@
         Author    : John Billekens
         CoAuthor  : Claude (Anthropic)
         Copyright : Copyright (c) John Billekens Consultancy
-        Version   : 2025.1111.2145
+        Version   : 2026.224.915
     #>
     [CmdletBinding()]
     param (
@@ -166,6 +166,7 @@
         $WorkingDir = "$($Application.configuration.workingdir)"
         $DisplayName = "$($Application.configuration.title)"
         $Description = "$($Application.configuration.description)"
+        $AppID = "$($Application.appid)"
 
         $BinaryIconData = $null
         if (-not [string]::IsNullOrEmpty($($Application.configuration.icon32x256))) {
@@ -223,6 +224,7 @@
 
         $Output = [PSCustomObject]@{
             Name    = $DisplayName
+            AppID   = $AppID
             Enabled = $Enabled
         }
         switch ($ExportFor) {
@@ -276,8 +278,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAWZhal1WPW8An8
-# uObPkUzKBwaV4awxtQ02p9pPG2xYsKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCzkn0I+ifUTIOh
+# lePD+Gdc5wAQ0HRw3qoiWtHL7RZTCaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -453,31 +455,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCAIB0wYbFUKn5QpfWcWeHDgp3Y8fc4OFjD6TDIyT7IG
-# 9zANBgkqhkiG9w0BAQEFAASCAYBtZEhFX8norL0ZEZD8TVmuLluuFAJSseJMgWwL
-# i6c/leUfPjABnp9anINFQNDnkHLEOoDRNcev47g0qyINLREGI6nBSvPhcA+Kz4CN
-# o94UmDEtleBSei4X3ioakApeHLddAXKXX8KCp8N61abT9yNAQcJbN19kkw5ZG+hl
-# upgBNLPVR/AMK8bjeXB2kFajV9cw/0bfFS61lJf1M5kJtSaFbF5TWEz3+ceJ3iZU
-# SKYqnjy/0mxNSg2EU0z8AxNisEd8tH9a/Y5eiN5Cljqv7Kc0yh+0DKdMsiBzqKeq
-# yacTg/MKBjtSRpRPReltyJI/IQkC2xMNgbTwFhN+K6R5KHWoJzsWEiYiKioVEhB7
-# Iy/BPhjUSsRIhdXPqTwXxIWMN3q08YYuQZBL1vB2txbAlIz8e9onl9BuGTs1HjLm
-# edLX6fHOFTopSoHoCHoZKZLhmOAINK4+D/6wcoswTXeC7LP4ujt3v9pXYJ3rSc5e
-# OP2c8ObBLYsbOeUxRzP825ro42KhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDUey5AtZzh4Pg5EaEyojYxtAKyB/xkpxmAjBREz3CF
+# vjANBgkqhkiG9w0BAQEFAASCAYAFvsJW9HbQimNG3vyDVCgQxauwP/SQc6dSYH2s
+# 3nekFEQqnwq2pcSkq6R/y4wcpN5oynySHONQkArZ8HkIWhulSsDoIrbNSHtQVhcc
+# vfrjRs1sSohwd7NWZu6U+4uNnlCrUCkQpB2Q4YdZA4VqkiSnw+vhJwtUpN2jZH++
+# MAJB3JCRA+RQAm/jxo/KzwigSdH50Ztm/tLZhHRYzuDo6eZd2kLYNU6xGclJ9ut2
+# ysigY/O7X6gdhK6/HfogdjcCty4PsuybExcuX5EA/GHInHgEUuIH9vODlVCm3qbR
+# QIVsul7D8/O99F1cWZGxBSt0utbWukZdBIfJD22tca9m5rpnbvUS6+qtbahL9c/c
+# XnnchIcC5e2FN02bZtabatR+/Jz380uZim9LBOCp7evXTGW5HWq6Hb+lcCV5NbLZ
+# o5fxgc0B45i/rKYpmN4iW2GhrM5DiDUXCYQRyTXrcyzVe5UMIVlsYEQGuWjPz858
+# aJMmzsB0GCZNflM9P2xlwOyvSu+hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMTgxODU1MzVaMD8GCSqGSIb3
-# DQEJBDEyBDB8VuijwypD2KTYPnBvATrRz24vVzDe5Q0L/x5Q9pAw8/g2mVmiC1aa
-# s7Asz0ooNTwwDQYJKoZIhvcNAQEBBQAEggIABQP7I1XLKAnY4x5wICaHNyK/JIx3
-# r5dXUTcTe+FIaWCRuUPrjKVEfoynSycFbiH485Z8e059tYN4rDYJjfF9E7sOKqqf
-# c3Lx38TaBeaMnDSOFB6HROsjM17Wf3avWH+AlUgNrrPGPuxtJdzxEpIRQmU94mlk
-# vzru9vpvVC+T2QX/JY8Os9bXnJp5hQGCs5ktMqKaQt3HPtkp5fKCi3yjwP/KL/da
-# hN4PA3JEOB8jUquSIKX1pE+tPUYCiNT9cF9mLJ0EEAJ2HLnnmiHolA0lmsNypol6
-# fybsOIgfCeBK8FOb7iZ3/B9sLsa8UJndEDTED88KAhjtKdU//9j0sm+tM493Wmvh
-# wsEJZH8qcGiGDVCo/mWep6IPFIkaI+JKUWgkN2cRQyOL/SieQHGL4Sn6opsLwJB/
-# OCqGPmcun5/MgmCMPkv7i22BJpBaHyzyz+/VjBi2uep1xlb+hsj97QEwZy1uIVfM
-# OVtHBDplJORcQRGPVZ9mJut8w9EDOgdVmmGTTM3/Uc2Hu91aAOlL499+YJHhJVt5
-# /7uVZNSBs9m11m5b1NOe2/rn0Uo30pPQ7/hiEKvcFd3fX1Cp/0+TfvM9l2SmUOyy
-# 44xhGbkB6+r2gq21jIiCrZBT5zscqAxTD9gNWFWF6mmwaUx3en1IsKGGKeWFQsGR
-# 1tPS2z1lZGUcPeE=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjQwODMwMDdaMD8GCSqGSIb3
+# DQEJBDEyBDCZ0KTFaRJoXXWkjmAC8T8eN6u12BeRSl0yrIzcCbTcPmC+89gukaqg
+# 95RoqGJWZcYwDQYJKoZIhvcNAQEBBQAEggIAEJoM7invgiTOrv+GuyHU3jSy4qWP
+# bdvhHwafYTUuV9KYWlvn1D3/Sf4Y35xvXW/Zj1auunAhiGwWCr2RzDsn+LGP3NGl
+# ti8SQveI6qpmvtI3uBX867rm+NVxA7q/i0aymHnDuk3MO28WXbkm2TuH6ILCLpam
+# 7+UaU4SZqFQedppGdeVbDKgXIY4Q/g/W8Y7Wf0OkB54PATcfPmYA3KbBcHRxUgUO
+# ZtA5a43lGO5oOEsk2yU3guuLmohgnI2USS9jjYsRg2UDkNLAmZIszhRmIZYRKZbX
+# tZE+hDsZ9F5efMpJg7PkI1OUgaYwJJKhwBOD5aBeiKBcW5v4vrKGblJtzQ4iRziL
+# Q0YL7mH8c1k8F4GmcOQtwLN4HVisfHlGJwAo6dZewHHqMAMSIhSleyuHeRcT9HIs
+# 5HjMyoEoUeHeLVI64J5KMsAu4eJBEZXbUh2VBDPWVHn5rHTXiCbPTH1/n0lSpx2B
+# pSramjWV4vUTBad+/wtSN3WolYM3ds4eWTnH1ye7TDgJcKXVQR5D/ELiu3tPycfr
+# qaaE0lWMlaTwLlepZAwy60YLwoX3DnfOSJw0kmIiLQ8WgIkGBmJ77JhDiooKE48j
+# 8kFJwHmd3b8Y7klSq4IHg+cyXvTsBQeQ25CqT/MuVDrM9K9W3pSkr4BnbBgL/O/A
+# CPf2tkYnh8zcpj0=
 # SIG # End signature block

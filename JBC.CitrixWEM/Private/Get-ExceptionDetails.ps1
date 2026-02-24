@@ -1,4 +1,4 @@
-function Get-ExceptionDetails {
+﻿function Get-ExceptionDetails {
     <#
     .SYNOPSIS
         Extracts detailed information from a PowerShell ErrorRecord object.
@@ -6,8 +6,8 @@ function Get-ExceptionDetails {
     .DESCRIPTION
         The Get-ExceptionDetails function processes a PowerShell ErrorRecord object
         and extracts comprehensive error information including exception messages,
-        stack traces, location details, and nested inner exceptions. This is useful
-        for detailed error logging and debugging.
+        stack traces, location details, command context, parameter bindings, and
+        nested inner exceptions. This is useful for detailed error logging and debugging.
 
     .PARAMETER ErrorRecord
         The ErrorRecord object to extract details from. This is typically obtained
@@ -16,6 +16,19 @@ function Get-ExceptionDetails {
     .PARAMETER AsPlainText
         If specified, returns the error details as a formatted text string instead
         of a PSCustomObject.
+
+    .PARAMETER IncludeEnvironment
+        If specified, includes host and environment context information such as
+        PowerShell version, computer name, and user name.
+
+    .PARAMETER ExcludeBoundParameters
+        If specified, excludes bound parameters from the output. Use this when
+        parameters may contain sensitive data like passwords or API keys.
+
+    .PARAMETER AsStringValues
+        If specified, converts complex objects (BoundParameters, TargetObject,
+        ExceptionData) to string representations. Useful for logging to flat files
+        or systems that do not support nested objects.
 
     .EXAMPLE
         try {
@@ -29,67 +42,317 @@ function Get-ExceptionDetails {
         Captures an error and extracts detailed information from it.
 
     .EXAMPLE
-        $details = Get-ExceptionDetails -ErrorRecord $Error[0]
+        $details = Get-ExceptionDetails -ErrorRecord $Error[0] -IncludeEnvironment
         Write-Host "Error occurred at line $($details.LineNumber) in $($details.ScriptName)"
 
-        Processes the most recent error from the $Error automatic variable.
+        Processes the most recent error from the $Error automatic variable with environment info.
+
+    .EXAMPLE
+        try {
+            Invoke-RestMethod -Uri "https://invalid.url" -ErrorAction Stop
+        }
+        catch {
+            Get-ExceptionDetails -ErrorRecord $_ -AsPlainText | Out-File "C:\Logs\error.log" -Append
+        }
+
+        Logs detailed error information to a file in plain text format.
+
+    .EXAMPLE
+        try {
+            Get-ADUser -Identity "nonexistent" -ErrorAction Stop
+        }
+        catch {
+            $details = Get-ExceptionDetails -ErrorRecord $_ -AsStringValues
+            $details | ConvertTo-Json | Out-File "C:\Logs\error.json"
+        }
+
+        Exports error details as JSON with all values converted to strings.
 
     .OUTPUTS
-        System.Collections.Specialized.OrderedDictionary
-        Returns an ordered hashtable containing detailed error information.
+        System.Management.Automation.PSCustomObject
+        Returns a PSCustomObject containing detailed error information.
+
+        System.String
+        When -AsPlainText is specified, returns a formatted string.
+
+    .NOTES
+        Function  : Get-ExceptionDetails
+        Author    : John Billekens
+        Copyright : Copyright (c) John Billekens Consultancy
+        Version   : 2026.129.945
     #>
     [CmdletBinding()]
-    [OutputType([PSCustomObject])]
+    [OutputType([PSCustomObject], [string])]
     param(
         [Parameter(Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
         [ValidateNotNull()]
-        [System.Management.Automation.ErrorRecord]$ErrorRecord,
+        [System.Management.Automation.ErrorRecord]
+        $ErrorRecord,
 
         [Parameter(Mandatory = $false)]
         [Alias("AsString", "AsText")]
-        [switch]$AsPlainText
+        [switch]
+        $AsPlainText,
+
+        [Parameter(Mandatory = $false)]
+        [switch]
+        $IncludeEnvironment,
+
+        [Parameter(Mandatory = $false)]
+        [switch]
+        $ExcludeBoundParameters,
+
+        [Parameter(Mandatory = $false)]
+        [Alias("Flatten")]
+        [switch]
+        $AsStringValues
     )
 
-    # Recursively collect all inner exceptions
-    $innerExceptions = @()
-    $currentException = $ErrorRecord.Exception.InnerException
-    while ($null -ne $currentException) {
-        $innerExceptions += [ordered]@{
-            Message = $currentException.Message
-            Type    = $currentException.GetType().FullName
+    process {
+        # Recursively collect all inner exceptions
+        $innerExceptions = [System.Collections.ArrayList]::new()
+        $currentException = $ErrorRecord.Exception.InnerException
+        while ($null -ne $currentException) {
+            [void]$innerExceptions.Add([ordered]@{
+                    Message    = $currentException.Message
+                    Type       = $currentException.GetType().FullName
+                    Source     = $currentException.Source
+                    HResult    = $currentException.HResult
+                    StackTrace = $currentException.StackTrace
+                })
+            $currentException = $currentException.InnerException
         }
-        $currentException = $currentException.InnerException
-    }
 
-    $errorDetails = [ordered]@{
-        Timestamp         = Get-Date
-        Message           = $ErrorRecord.Exception.Message
-        ExceptionType     = $ErrorRecord.Exception.GetType().FullName
-        ErrorId           = $ErrorRecord.FullyQualifiedErrorId
-        Category          = $ErrorRecord.CategoryInfo.Category
-        ScriptName        = $ErrorRecord.InvocationInfo.ScriptName
-        LineNumber        = $ErrorRecord.InvocationInfo.ScriptLineNumber
-        CharacterPosition = $ErrorRecord.InvocationInfo.OffsetInLine
-        Line              = $ErrorRecord.InvocationInfo.Line
-        PositionMessage   = $ErrorRecord.InvocationInfo.PositionMessage
-        CategoryInfo      = $ErrorRecord.CategoryInfo
-        TargetObject      = $ErrorRecord.TargetObject
-        StackTrace        = $ErrorRecord.ScriptStackTrace
-        InnerExceptions   = if ($innerExceptions.Count -gt 0) { $innerExceptions } else { $null }
-    }
+        # Build formatted PS error message
+        $formattedFields = @(
+            $ErrorRecord.InvocationInfo.MyCommand.Name
+            $ErrorRecord.Exception.Message
+            $ErrorRecord.InvocationInfo.PositionMessage
+            $ErrorRecord.CategoryInfo.ToString()
+            $ErrorRecord.FullyQualifiedErrorId
+        )
+        $PSError = "{0} : {1}`n{2}`n    + CategoryInfo          : {3}`n    + FullyQualifiedErrorId : {4}`n" -f $formattedFields
 
-    if ($AsText) {
-        return ("`r`n$(( [PSCustomObject]$errorDetails | Out-String).Trim())`r`n")
-    } else {
-        return [PSCustomObject]$errorDetails
+        # Parse call stack into array for easier processing
+        $callStack = $null
+        if ($ErrorRecord.ScriptStackTrace) {
+            $callStack = $ErrorRecord.ScriptStackTrace -split "`n" |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ }
+        }
+
+        # Extract error code properties (present on some exception types)
+        $errorCode = $null
+        $nativeErrorCode = $null
+        if ($ErrorRecord.Exception.PSObject.Properties['ErrorCode']) {
+            $errorCode = $ErrorRecord.Exception.ErrorCode
+        }
+        if ($ErrorRecord.Exception.PSObject.Properties['NativeErrorCode']) {
+            $nativeErrorCode = $ErrorRecord.Exception.NativeErrorCode
+        }
+
+        # Get bound parameters unless excluded
+        $boundParams = $null
+        if (-not $ExcludeBoundParameters -and $ErrorRecord.InvocationInfo.BoundParameters) {
+            if ($AsStringValues) {
+                $paramStrings = $ErrorRecord.InvocationInfo.BoundParameters.GetEnumerator() | ForEach-Object {
+                    "$($_.Key)='$($_.Value)'"
+                }
+                $boundParams = $paramStrings -join '; '
+            } else {
+                $boundParams = $ErrorRecord.InvocationInfo.BoundParameters
+            }
+        }
+
+        # Get unbound arguments
+        $unboundArgs = $null
+        if ($ErrorRecord.InvocationInfo.UnboundArguments) {
+            if ($AsStringValues) {
+                $unboundArgs = $ErrorRecord.InvocationInfo.UnboundArguments -join '; '
+            } else {
+                $unboundArgs = $ErrorRecord.InvocationInfo.UnboundArguments
+            }
+        }
+
+        # Extract Exception Data dictionary
+        $exceptionData = $null
+        if ($ErrorRecord.Exception.Data -and $ErrorRecord.Exception.Data.Count -gt 0) {
+            if ($AsStringValues) {
+                $dataStrings = $ErrorRecord.Exception.Data.GetEnumerator() | ForEach-Object {
+                    "$($_.Key)='$($_.Value)'"
+                }
+                $exceptionData = $dataStrings -join '; '
+            } else {
+                $exceptionData = [ordered]@{}
+                foreach ($key in $ErrorRecord.Exception.Data.Keys) {
+                    $exceptionData[$key] = $ErrorRecord.Exception.Data[$key]
+                }
+            }
+        }
+
+        # Get target object
+        $targetObject = $ErrorRecord.TargetObject
+        if ($AsStringValues -and $null -ne $targetObject) {
+            $targetObject = "$($targetObject)"
+        }
+
+        # Build the error details object
+        $errorDetails = [ordered]@{
+            # Timestamp
+            Timestamp           = Get-Date -Format "o"
+
+            # Formatted error message
+            PSError             = $PSError
+
+            # Exception details
+            Message             = $ErrorRecord.Exception.Message
+            ExceptionType       = $ErrorRecord.Exception.GetType().FullName
+            ExceptionSource     = $ErrorRecord.Exception.Source
+            HResult             = $ErrorRecord.Exception.HResult
+            ErrorCode           = $errorCode
+            NativeErrorCode     = $nativeErrorCode
+
+            # Error action context
+            ErrorActionPref     = [string]$ErrorActionPreference
+
+            # Error identification
+            ErrorId             = $ErrorRecord.FullyQualifiedErrorId
+            Category            = $ErrorRecord.CategoryInfo.Category
+            Activity            = $ErrorRecord.CategoryInfo.Activity
+            Reason              = $ErrorRecord.CategoryInfo.Reason
+            TargetName          = $ErrorRecord.CategoryInfo.TargetName
+            TargetType          = $ErrorRecord.CategoryInfo.TargetType
+            CategoryInfo        = $ErrorRecord.CategoryInfo.ToString()
+
+            # Target object
+            TargetObject        = $targetObject
+
+            # Command context
+            CommandName         = $ErrorRecord.InvocationInfo.MyCommand.Name
+            CommandType         = if ($ErrorRecord.InvocationInfo.MyCommand) {
+                [string]$ErrorRecord.InvocationInfo.MyCommand.CommandType
+            } else { $null }
+            ModuleName          = $ErrorRecord.InvocationInfo.MyCommand.ModuleName
+            ModuleVersion       = if ($ErrorRecord.InvocationInfo.MyCommand.Module) {
+                $ErrorRecord.InvocationInfo.MyCommand.Module.Version.ToString()
+            } else { $null }
+            InvocationName      = $ErrorRecord.InvocationInfo.InvocationName
+
+            # Script location
+            ScriptName          = $ErrorRecord.InvocationInfo.ScriptName
+            PSScriptRoot        = $ErrorRecord.InvocationInfo.PSScriptRoot
+            PSCommandPath       = $ErrorRecord.InvocationInfo.PSCommandPath
+            LineNumber          = $ErrorRecord.InvocationInfo.ScriptLineNumber
+            CharacterPosition   = $ErrorRecord.InvocationInfo.OffsetInLine
+            Line                = if ($ErrorRecord.InvocationInfo.Line) {
+                "$($ErrorRecord.InvocationInfo.Line)".Trim()
+            } else { $null }
+            PositionMessage     = $ErrorRecord.InvocationInfo.PositionMessage
+
+            # Pipeline context
+            PipelineLength      = $ErrorRecord.InvocationInfo.PipelineLength
+            PipelinePosition    = $ErrorRecord.InvocationInfo.PipelinePosition
+            HistoryId           = $ErrorRecord.InvocationInfo.HistoryId
+
+            # Parameter binding
+            BoundParameters     = $boundParams
+            UnboundArguments    = $unboundArgs
+
+            # Exception data dictionary
+            ExceptionData       = $exceptionData
+
+            # ErrorDetails object (cmdlet-provided additional info)
+            ErrorDetailsMessage = $ErrorRecord.ErrorDetails.Message
+            RecommendedAction   = $ErrorRecord.ErrorDetails.RecommendedAction
+
+            # Stack traces
+            ScriptStackTrace    = $ErrorRecord.ScriptStackTrace
+            CallStack           = $callStack
+            ExceptionStackTrace = $ErrorRecord.Exception.StackTrace
+
+            # Inner exceptions
+            InnerExceptions     = if ($innerExceptions.Count -gt 0) {
+                $innerExceptions.ToArray()
+            } else { $null }
+        }
+
+        # Add environment context if requested
+        if ($IncludeEnvironment) {
+            $errorDetails['HostName'] = $Host.Name
+            $errorDetails['PSVersion'] = $PSVersionTable.PSVersion.ToString()
+            $errorDetails['PSEdition'] = $PSVersionTable.PSEdition
+            $errorDetails['CLRVersion'] = if ($PSVersionTable.CLRVersion) {
+                $PSVersionTable.CLRVersion.ToString()
+            } else { $null }
+            $errorDetails['ComputerName'] = $env:COMPUTERNAME
+            $errorDetails['UserName'] = "$($env:USERDOMAIN)\$($env:USERNAME)"
+            $errorDetails['ProcessId'] = $PID
+        }
+
+        if ($AsPlainText) {
+            $output = [System.Text.StringBuilder]::new()
+            [void]$output.AppendLine("")
+            [void]$output.AppendLine("=" * 80)
+            [void]$output.AppendLine("ERROR DETAILS - $($errorDetails.Timestamp)")
+            [void]$output.AppendLine("=" * 80)
+
+            foreach ($key in $errorDetails.Keys) {
+                $value = $errorDetails[$key]
+                if ($null -eq $value) {
+                    continue
+                }
+
+                if ($key -eq 'InnerExceptions') {
+                    [void]$output.AppendLine("")
+                    [void]$output.AppendLine("--- Inner Exceptions ---")
+                    $index = 0
+                    foreach ($inner in $value) {
+                        [void]$output.AppendLine("  [$($index)]: $($inner.Type)")
+                        [void]$output.AppendLine("       Message : $($inner.Message)")
+                        [void]$output.AppendLine("       Source  : $($inner.Source)")
+                        [void]$output.AppendLine("       HResult : $($inner.HResult)")
+                        $index++
+                    }
+                } elseif ($key -eq 'CallStack') {
+                    [void]$output.AppendLine("")
+                    [void]$output.AppendLine("--- Call Stack ---")
+                    foreach ($frame in $value) {
+                        [void]$output.AppendLine("  $($frame)")
+                    }
+                } elseif ($key -eq 'BoundParameters' -and $value -is [hashtable]) {
+                    [void]$output.AppendLine("")
+                    [void]$output.AppendLine("--- Bound Parameters ---")
+                    foreach ($param in $value.GetEnumerator()) {
+                        [void]$output.AppendLine("  $($param.Key): $($param.Value)")
+                    }
+                } elseif ($key -eq 'ExceptionData' -and $value -is [System.Collections.Specialized.OrderedDictionary]) {
+                    [void]$output.AppendLine("")
+                    [void]$output.AppendLine("--- Exception Data ---")
+                    foreach ($item in $value.GetEnumerator()) {
+                        [void]$output.AppendLine("  $($item.Key): $($item.Value)")
+                    }
+                } elseif ($value -is [string] -and $value.Contains("`n")) {
+                    [void]$output.AppendLine("")
+                    [void]$output.AppendLine("--- $($key) ---")
+                    [void]$output.AppendLine($value)
+                } else {
+                    [void]$output.AppendLine("$($key.PadRight(20)): $($value)")
+                }
+            }
+
+            [void]$output.AppendLine("=" * 80)
+            return $output.ToString()
+        } else {
+            return [PSCustomObject]$errorDetails
+        }
     }
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAb+vcx5Y7EKM1c
-# GkwNnNkyvDderDMfrpRogAjLtD8ogqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAnguTMzCWNM2kg
+# s59xfpVYfST8RnA2RYYw0vfqXQyb7KCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -265,31 +528,31 @@ function Get-ExceptionDetails {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDSG5QCwGXzpivbqPD/5+EtOi1Ocx1qC60QEkNysmxl
-# szANBgkqhkiG9w0BAQEFAASCAYCfsh5IdgWKkyrxI4SfaN42hBw7NoI4mCQ9v25m
-# TzZfvF9gEyrI189UFBmcEMhGegOktsGw/y7GoWpxUvZh3OikT9SYnGCPEIIot22H
-# ejOYx6KkPSfIFAPl5GQLcFknzqVyuOyfXUMQ2j4R+6h257zIkXJzxkybwTs4JPEp
-# eStVO2wiumlnHU1fqvFHJwYo+/FTLK3MDwN7tTZNqRqddbOsYuGIQeTZO4vx+fN9
-# RZaerdq/w4PivJHvvW6uuEv/o+9WvknaGRnerht/O4Z0dn2wbBK8yBxLQd1pi5XH
-# 77Sl20ZmLnPP2GZEN9bBaHrLLOy+OkptNNHlDZ9NOtksRTNbN3Tnbn9WY1zvcrpR
-# GcKjWi61WJaM+AAf9U566/Dyh7WbxFcspsD56R6j1+iolyV5Y+1PH37DECnopamI
-# 1sCctKeP4kUQjueXczum765lu/7EGKWWI9/yCWrKXO7anmn4/NuyGoGxpqMz7uz9
-# YdYp4pOlCMFH/L1sjdKigI48xFehggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCCZAsBiDxDwTCzQWtCQLdayTHzm7Ylrn+0/5LPu4KK7
+# uTANBgkqhkiG9w0BAQEFAASCAYBV8O2cwg6WGa/eBQN/IrfdXJSoJrYKK203sh5o
+# f21eTDVxykpAM/aCKJWfkVHsdcdCe1NYR2vsdLSIVXRz6bUni2s9yfgVdYsNHO2F
+# /aoniXkK5NlwF05hJRs8wu0/vnOm2Pq2IeZ+hU3hEK6yKFPGbZ2CDxXJIZL0kHl4
+# u+lhk5PSteKV8td6liqg1bprWlJC5uGBIMbhqPOBpp3Fvae6rxeHzOs86BqwGOmm
+# fZjPjN7cdoCyLPMAXH2mFKZ9nmxvQela+KvM2lLRZ7V7SMV28UqfqHl8ad46Nah9
+# h+lu9V2IJkEckfMyCf+0RhIbu1O4rKrdZP4p5trDCpynmyqxg+fPgyD1KozLmodX
+# 9ryuyCcNkEdVP4mWpUcSTilAD4GblmwwrgqCy5qnj8IGXnj0NQsg4xRCu2CFss32
+# iXetWxfBf4Ux9EAyvJXHxQY5Z8e6apdf0/6TRuIXP/yfMX16AlvIF8wE4RDO2557
+# uG2F2Lr0fY3ENaM+4vbP1Bdp8XOhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEyMjI2MTRaMD8GCSqGSIb3
-# DQEJBDEyBDCmIaCeYrzRzNHzl/qlcx77VFv3L0r2sKcYzRYHuxhGDRZKCJ1TZG9G
-# jHj8UdInDW8wDQYJKoZIhvcNAQEBBQAEggIAuUsMCWJl50/16AMgYNNbQuZ1aFDe
-# CwDUHxubWDy2UmU5c5gaa8knV2wQeXs8hQ6tN2ToiSYFw8RBVHg8hfCjOXRB4pop
-# k5o0Ucplg5um8ibmHikyl5xJJJBfnezzXbWhgvVx9ia0sKNRdUlLBywmv1tz354o
-# l4p+0sGBrgKj5M/R8+RxRvB6w2n3seozNZJRTvKruQ+joqtl6W1B88grBstne2dj
-# ToqZdrV/ga8/xUQSkomAIsjxKZseYQ4OmHEbFSMdHxah4WK99hk/LI0T/FAiUk7t
-# hfRbRaAh4In5FJT8F88f/u+FRCvTmLesEWqDEOlKdxwCjlH5R9RkZ3GmMpT3f3v1
-# 1iLpDEE29L094ZMJRq8U1mDpf8qfJ8+RGiMWKVDurjgzueSHThVN4q7Zm1sN7RTW
-# VHr++sbQkEBKjxpDcG98+Dh0rCUlZajFWww4YwEoocAsop7Av31UKCtsxBw5MauV
-# rcy80DGvodZc4i7BuPtw4lnyfZ27UPb4DQMWkdJ7hD8YnP5vY33RPGxltPLG84nW
-# HqV20wxFYXiDd36+likrzozs2czu8kUp/CL99YCCES1XaRgzGNw2uGGIFIqkmcZ6
-# q6jatLkOEGb4ha3h9jYADKeiINSu62VZRpD2dMSQEmSja4RKIN02y26wv2efRW6A
-# 6eKcbe2bVjFQETU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjQwODMwMDFaMD8GCSqGSIb3
+# DQEJBDEyBDDNTlGsI3nNYCAuPikOrHT+HzbxrzGeqg9Y0rog1n5OXcziixbULAje
+# V9+PfB4hBR4wDQYJKoZIhvcNAQEBBQAEggIAcF/NTt3L0foerhgv7LxmlMchR/zd
+# ++r+nLum5cOIOvcOKOYeK/fWp64bJw7068G4C3D5vN+RJYbBG3kh45XaXd00ukpe
+# en4NScW8Tg3WVWMCDt0DlhFTCPpAJPaiBD0M05AH2cU+2L500rJZp6cWPohUAKj+
+# vSj0rinuHRN/SDzhuxpeITXRfcwWyvOeOfwp2NOuGRdeBb3gp8r9NhEyyesTyUaI
+# 8ab4IDocZwtNzRwUhADyJsYCWPX7HNYBulwoWNU74Ig3K1Tu/1+1gcWFE7MT0qyH
+# O2zPrGTLq2og/C8SopGWsTzmfiS0JFxGM+XouN9NkiYoIs8Zh2krginsePkthKx4
+# dcOSTMIO4kn8nkJ3EWvGKJCFFKv6IbO2VOgR4SAY1ri3tiWQZ4+U4J7A6tmTINUF
+# PbFGO0LTN0l4r4Fv/fELVCIxWZZnkQkJiFPK90zv4vH8DZxcuJSBD9DL0/cVYgJp
+# jKFSw49Kn07C/RyPf9Cl3aZVsn6OScXyHYNhjhaFKGsUKBJvxdoEbpF+P0C9A2V1
+# pMIKSpPAHKLqhzdjBHFbDrwDb2+Dv/3gVS4v4TtctF/Zpj07elKbSqY5Dun8LAn8
+# eLyDrYRmy86fZCS8EyRY0HNwVF+fA3DcnmKqVuoGHWCvYmixOxt814zAWesW8GzB
+# jZrvY7dHv8uA6sk=
 # SIG # End signature block
