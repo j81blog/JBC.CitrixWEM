@@ -243,19 +243,19 @@
                 }
                 $Output | Add-Member -MemberType NoteProperty -Name "WEMAssignmentParams" -Value $WEMAssignmentParams
                 $WEMApplicationParams = [PSCustomObject]@{
-                    startMenuPath = $StartMenuPath
-                    appType       = "InstallerApplication"
-                    state         = $State
-                    iconStream    = $IconStream
-                    parameter     = $Parameters
-                    description   = $Description
-                    name          = $DisplayName
-                    commandLine   = $CommandLine
-                    workingDir    = $WorkingDir
-                    url           = $URL
-                    displayName   = $DisplayName
-                    windowStyle   = $WindowStyle
-                    actionType    = "CreateAppShortcut"
+                    StartMenuPath = $StartMenuPath
+                    AppType       = "InstallerApplication"
+                    State         = $State
+                    IconStream    = $IconStream
+                    Parameter     = $Parameters
+                    Description   = $Description
+                    Name          = $DisplayName
+                    CommandLine   = $CommandLine
+                    WorkingDir    = $WorkingDir
+                    URL           = $URL
+                    DisplayName   = $DisplayName
+                    WindowStyle   = $WindowStyle
+                    ActionType    = "CreateAppShortcut"
                 }
                 $Output | Add-Member -MemberType NoteProperty -Name "WEMApplicationParams" -Value $WEMApplicationParams
             }
@@ -282,8 +282,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCAzaH4eRJIHkUT
-# M0GdMvYVJUPoCSsQjskjXUJnA3K266CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBxTixMEJ9jhHBD
+# +SeUcB7BIxA1Wkc0wEfCUANoIg1xSqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -459,31 +459,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBT1sxge9mGqYLr1FfzngseKLVxOg2phnhGV5qE5yjF
-# zTANBgkqhkiG9w0BAQEFAASCAYAVLL6K/7nB1UCyiYYQAC7wZmvxk22EBYqaYEBI
-# l2Jsg1MaSNUv5EgZaPk8QA+QeDmIGvF6v4V7IuWbssE/mucNT3hS1ixZs09h132O
-# ZStMxw3RaVrVv7WGVgQ/RxOFpoviPx1iocjAI6WFxkqwwtmcRwa7lR9a363UQxYw
-# iz+i0yGoTs5yyAfXE5+tcxF6Aegg//M7qsIEfypLcJ7O9UVt6Lesw+HTMGAngF9b
-# k/TwFw3f4XIpxsGJmh4P3x+COIWOJV5biqd7GxHSo2bksxPTADn+cAWoLYrFXE4Z
-# NqfEsjnyeBobdBWe6YejILD90HUwbWOmts8580AVZK3dS0+hh6FCoWI+QHMoc0f7
-# m0UDuflsPeRXYa/fWuJdBYD1/h4VGhXLceFTeqSJrZIXDkhn/MlqoBhwGLqmAyrq
-# KfTR2RAtHOshW9D3LLiL6WzODjRzV5yzA5NFmr4hLx4i3HK9XmiqnoGfcmZZ7e61
-# QyudC6c4UYMmEGwmXB4odnyxQZqhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBmyWCH87RDiTUyCFg0vCC4isefPkZb23Rvv0QHK11E
+# PDANBgkqhkiG9w0BAQEFAASCAYBhc1q04Qbm1vlpiLQVCzT1HRUjjYHvNzXZJjDM
+# Ok9Hn4V8f39GtahxbBpfCcir9A8ZFUUN7xhCWJIS2D1p00G22jSvjPPGsRqYSmRE
+# J/eDxeLO4hrN6kKSfhv8UQcEXAWDVGk8J0n4tjMRuwnrAIypee07IfPnngRZ7euy
+# bqtZW8DQdGfCtlgkOklwAajuMq4EH8pkSQRyL565kSJ4uoaO9iEymy0hJmSOgE5o
+# 2no5WwFWSvHtKYAxHG/EODgQ48Y3MZhgR/4wS2mq9sCdwGBFJKauXfxyRldkQiQX
+# f9gd99xLIjOd/Z0/6/dIPu1b6pkXHJ5GkEJV4tqfkZWSB8nJMdi2vdK3pLTQB0DN
+# 8IPKxbjYHbNmaoPjXfmqYpGPgq5rweTFVxsX7JoUOnpOCBrRioWUMA8BqCp2+YYb
+# JibwzzefyI+Gq8QREYfA9W74LofOnMUT8F3JZxI3KoMSFiqBz38YcA8tvSg1lUwG
+# Kep9pkJRLkSu2lVAdWi7mxkrA6GhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxMzUyMjJaMD8GCSqGSIb3
-# DQEJBDEyBDAGI/tlUrVytEqZYpgYy2KursNnmw5lkchwhajMESKiuxKJuuO6+tX7
-# 0qzIufJasLcwDQYJKoZIhvcNAQEBBQAEggIAdbDyANajbnwdC7ljOsN8p7Y0vqmp
-# Ycdg86Tn/Ria4IO+li1m8M9z9/a9UGFfAX5Na/9dEBcuPrLIn2HBSVvXWJnstyNI
-# 2D75TcreiI+33Rgn57QvPPuzrKiasPc3gX2LxueNHMBejzvbDUxVB5QVjcyLfDia
-# rokd3oSgkRVmbZ04TeU6bS0XCRrfny8scwr2m0kNbbbyruWIgiFNSK3jZvrFQzz9
-# t8Js1nPxu9S+EdiD0VfpZ1LI/TgVYyawdcvtTlMWG7apYj3z5bkazxkyyg5ACYY5
-# GTTpMceBHybefXu4o7oQAAySNsNhQb/+Mvxr5D7DL5j/0lBKLD8PhuCNHk/umyOB
-# hzw/j3m9bI/5G2YB76nMCbieeEWBUt/noDv7dy4hWcsdEjzQj0HAuyj985+Hu9jC
-# LVIIT/FBwMVOqnhjSwjRzZnHfQ01la7oidKreuxLntk6UbNLEs8M54nF4620iWwT
-# lutNwm3s8lGXQyeNxXROzxYkyC2pTuDOG9BbEi/usl4o6bB1TGAe6E7KRX3MJFGX
-# zqH0zA8w6tMaIT9mgY3lYRnGJc/TS4UB9owpDMH5FAi1RiFmY8ImVZTksf2QyrCR
-# 226UQRwuLzknKw20a7xxm4HWH1ZDIrGVEPIaiwYveFSVsAZ8Kysc7oCgIv5qJim/
-# eTgGJWdwTjtpO8A=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxNDQ3MjBaMD8GCSqGSIb3
+# DQEJBDEyBDBk65lvKo70P9JvNfCaH/74pCJjbdNocO/9qbpsNPV3X3ByzC5sMilo
+# wVjpo4cnbpwwDQYJKoZIhvcNAQEBBQAEggIAA1/BvMIef5e2H27t/9f/oadCP0a+
+# jhnxEgSNlnQnUGyfQxq1Cdc+DHn6RKMM0c9L1p3hx5UQWwwNO2BQYWsTLnQqN/Xm
+# vHaFx/W60N40wNBaNrvqheTIa9XUWZfs08smXYiFZcNpbrUsiKdMNDtWpqV+fdmp
+# VbtvmEoQlwUAayliWWuJLGy699silr3M+EvFVUo67rZ28XP1MlHElTG0NUA+2W4a
+# 99L5QXGa+cW46/WHqrv4l+7ZSkPjQhObisCK4l34heg08uvdv160b40vt4A9hgBr
+# tB0T3EbWyEX+LEAVhGPCcUmmvTFo+nFbi4j0whNykshkubzJoJzpGop1Tl0Pzjca
+# +ihUcKecevUF4GVLtTg/CyJA7TgBXfjjUIQ3dEK4BHhqkxlLKgOzTPr9BgTwITsU
+# UrpYuXepu/54foJRLRFFQBvwfEf5/xBjgj57HeoBLA/9Gz2OTm/NGCaLsYd09u+Z
+# urIEch71csEo6/7IEdZ4xabN3tjPN6ugraKUleiuyNR4LJUKRkn6fsQo5f5TRzaa
+# bKXY/BvTuu+zstzwoUEGvaSlbBeyvYaT/OhOFhJlnWUhzTEv4nNnjskL2mI2iy6f
+# FQJB4VmtEd5IiUNDe6JBiqLRZvQfQSSzd9gmrsif7AcsmZph+vAQ8jon8FeuI+n0
+# tlWhqASFey6XUeI=
 # SIG # End signature block

@@ -50,7 +50,64 @@
 
         # Load image from byte array
         $memoryStream = New-Object System.IO.MemoryStream(, $binaryData)
-        $originalImage = [System.Drawing.Image]::FromStream($memoryStream)
+
+        # Detect image format by magic bytes
+        # ICO: 00 00 01 00 | CUR: 00 00 02 00 | WMF: D7 CD C6 9A or 01 00 09 00
+        # EMF: 01 00 00 00 (with " EMF" marker at offset 40) | BMP: 42 4D | PNG: 89 50 4E 47
+        # PE (EXE/DLL): 4D 5A ("MZ") - extract embedded icon resource
+        $isIcoOrCur = ($binaryData.Length -ge 4 -and
+                       $binaryData[0] -eq 0 -and $binaryData[1] -eq 0 -and
+                       ($binaryData[2] -eq 1 -or $binaryData[2] -eq 2) -and
+                       $binaryData[3] -eq 0)
+
+        $isWmf = ($binaryData.Length -ge 4 -and
+                  (($binaryData[0] -eq 0xD7 -and $binaryData[1] -eq 0xCD -and $binaryData[2] -eq 0xC6 -and $binaryData[3] -eq 0x9A) -or
+                   ($binaryData[0] -eq 0x01 -and $binaryData[1] -eq 0x00 -and $binaryData[2] -eq 0x09 -and $binaryData[3] -eq 0x00)))
+
+        $isEmf = ($binaryData.Length -ge 44 -and
+                  $binaryData[0] -eq 0x01 -and $binaryData[1] -eq 0x00 -and
+                  $binaryData[2] -eq 0x00 -and $binaryData[3] -eq 0x00 -and
+                  $binaryData[40] -eq 0x20 -and $binaryData[41] -eq 0x45 -and
+                  $binaryData[42] -eq 0x4D -and $binaryData[43] -eq 0x46)
+
+        $isPe = ($binaryData.Length -ge 2 -and
+                 $binaryData[0] -eq 0x4D -and $binaryData[1] -eq 0x5A)
+
+        $tempFile = $null
+        if ($isIcoOrCur) {
+            # Use System.Drawing.Icon for ICO/CUR format - GDI+ (Image.FromStream) fails on
+            # ICO files with PNG-compressed frames or certain color depths
+            $icon = New-Object System.Drawing.Icon($memoryStream)
+            $originalImage = $icon.ToBitmap()
+            $icon.Dispose()
+        } elseif ($isWmf -or $isEmf) {
+            # Use Metafile for WMF/EMF vector formats
+            $metafile = New-Object System.Drawing.Imaging.Metafile($memoryStream)
+            $originalImage = New-Object System.Drawing.Bitmap($metafile.Width, $metafile.Height)
+            $g = [System.Drawing.Graphics]::FromImage($originalImage)
+            $g.DrawImage($metafile, 0, 0, $metafile.Width, $metafile.Height)
+            $g.Dispose()
+            $metafile.Dispose()
+        } elseif ($isPe) {
+            # PE (EXE/DLL) - WEM stores the full binary; extract the embedded icon resource
+            # Write to a temp file so Export-FileIcon can read it, then return bytes directly
+            $tempFile = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "$([guid]::NewGuid()).exe"
+            [System.IO.File]::WriteAllBytes($tempFile, $binaryData)
+            try {
+                $peIconBytes = Export-FileIcon -FilePath $tempFile -AsByte -Size $Size
+            } finally {
+                if (Test-Path $tempFile) { Remove-Item $tempFile -Force -ErrorAction SilentlyContinue }
+            }
+            $memoryStream.Dispose()
+            return [Convert]::ToBase64String($peIconBytes)
+        } else {
+            try {
+                $originalImage = [System.Drawing.Image]::FromStream($memoryStream)
+            } catch {
+                $magicBytes = ($binaryData[0..([Math]::Min(7, $binaryData.Length - 1))] | ForEach-Object { $_.ToString('X2') }) -join ' '
+                throw "Unsupported image format (magic bytes: $magicBytes): $_"
+            }
+        }
 
         # Check if resizing is needed
         if ($originalImage.Width -eq $Size -and $originalImage.Height -eq $Size) {
@@ -91,8 +148,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCC3Ki9rlJVvPGHn
-# 5IoOFL8coJXfmZuUgKtpxHL5pv0Qc6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDYGzhIBALs7XpU
+# xaCK9kMJ3yXDtn2pBJv1QVdaRbsxJKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -268,31 +325,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCCnJPJ4TXbA1HGZMhV36QXEXe7ekOT6Pa/xaCPa+Jit
-# zTANBgkqhkiG9w0BAQEFAASCAYChtjIczFejHfTl/YMMmBjpqjIF3N2V0NSWnGhF
-# cwBONjaykqGefjpqMhpJEnPdVAQAZDy5bJpaBklohy94QSzB6gxjc2ugyEjCVD5Y
-# +Hp+ipZEzhZRlvSOX3XBhf2NsVihIjcmizuzDaX6Swe4nEPybyDTOIgZYHSK5zfu
-# WAh2hsfMfCmlPp9fliLJnK6yiWHjze0QdpQHOfk8OlzWVT4yOPlZZEh7Hd+VNwBd
-# M2Puk6yN2EXOfCiYCZVLq0suCDAIWSMDms1WKTn8tmRBnKVEcA2Z3I6iNb8fIH77
-# 7TZTkb7/QPfC5aV7PM0f44kjGXIu2kL9Qm+tysZmkJVjpRaGFgQitKSJ0BkkDPls
-# md0yqkeL789RhR6AysK/LEgK/UChfanAb20alvU/fTVU4NMn8r4hm147XzpAAKb1
-# AAU2AJRop+WZt1Ieq852/MYvNfbLIMGXpuxhAFJrWLD5zugZ9A/MbJzSe4OKpKlR
-# YF2HuUivfeDa7T4ZRFG7UZ+q54KhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBq8OAOar5aMpEzuaLqcsVQlWXESaBTyR6KRzFThZ14
+# BjANBgkqhkiG9w0BAQEFAASCAYACUjusKh5H65CHy0mGfUIhNpcGh4siRWvZDqUn
+# bBrS66R50EEiP2KtrpX8zq12jmVKJ/hdCTYhxbGXVMYruEEhWX22ITdYOvyxZWBV
+# yBZ0pUDFUDzOqZ+YleuTIyXvQGJVaYr2Z2jDHI8ELldyUsyza+JAK367PLyOaqRg
+# NLsVyo0aUYdAS7VxUtbJtIlx1HJp7X0dckAJjaBN6NIzdB8AQ1PdsAVP1wOhCF1E
+# qheTs1VQ5QfExAttxkLmPUnLmPVwwJl14NoL8vkNt1tH7rET01gHKOTA+uDlWic1
+# 7tdC/w6Pgt3nU+0P1WYvnCrpErjxzC3AQV3i7pVH7SXsXJGxpRC8OLAgDh7PSNzd
+# /Wimu8ZFdnKr7Ce0cf+ErFQlfBPUqTyoniNv4JPZaCcV66o3Ec+LOhxH2on4jMJ0
+# J2FEScr0OsAHb8ZUG7ysMC7BIK05y9Hpu8WI3gBhh7cZ3kLo4zqQXBMNOI5mhx3J
+# wNYrCA92bh0GlyvF0SH0+Ma7pKmhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxMzU5MDBaMD8GCSqGSIb3
-# DQEJBDEyBDCaBlPuRPEq7ONeZJYnNGS0sVXF91zP7KrNp7z8AUjrzg9iDUC24NUL
-# cJZ33IDAkaAwDQYJKoZIhvcNAQEBBQAEggIADYjfwWtcPusIDhPi83/13bifTQEk
-# U3VqlbTZcY4vln8RIqLmItnVMAZ96V2O5NEsRtOJHvBOSWauan0wzPhBWfFMhUGI
-# ZA7EqACGycAmnstAzXsJgxekniL5aA8XSOvhjyeOAEFe+ngjqsZ9qH99ENFsf4Ya
-# PP+Ifmlfh8nqIH/sgEJ355XqRntaBa+SyGfIqG8Z8Cz9R8Fx/5gzFsi6E6Ow0XIe
-# /8TIuEXuBc1yuSLPXIY171BWyWOYCyR57gg2+u9k24l4hKtECGIFm2utkzNYsrnh
-# lR+wnOo4y60dJO17lb4pHseLPsC5BjpvtkSZmmJKB0QtJPjHHBStM7LsiBfXpEJR
-# T1QIhh78kGgMXKiXtQM6f/cStPFni2g61Mrp9H6liMGaMllIbws0D4FBW0r4cuZU
-# aOR07YmWZP6NPtceuqo6jPTjfaVZM608INqqGy7xZoVX2KxESsmZU/wrE3GtYTL6
-# sv7JqOpNrx2/ewQNMDBHfl/iGuCTjMBn1rUTrqXwut+GqJfq7uB+e40Ru4KVyJ3e
-# b1tAXId7kw9mTNXyBe34LvK2F4Pu74p89MzQJY98FrD7u4GtEIMWPKn5d5anqimb
-# J5dqv5NFUIBciPLLsdebg6s4n5y6e/zOyhQVx2pZ3vW2VfimGkWAzSghHJwYnOjl
-# d2SR5kmncCHzSsc=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxNDQ3MTNaMD8GCSqGSIb3
+# DQEJBDEyBDCvsbM0ruO5NObC3bqdepRa5ld6cljc+ZLjzYRk+umwolmxqAIK4Tig
+# YkiqzTBKIhowDQYJKoZIhvcNAQEBBQAEggIAoyLbyDBbd+elpjo55De+Ha1m3rFI
+# ddrdOYittDu+sf7qJnvEm6VtHjsyrC/h9GzQHe6JpBBN2Il/KJNSD762HBy4ieAW
+# o047hRRyIVcyuSWi/96fukvq3mBH80B4nY0aibwyjhqN0qSi+xAOphFYFFkt5Scf
+# eSNRIU1iPal3UQTp8esWARqbkVC7bP1kk+NuFkgVScEBKDhLtUOQSxiSODDPM24f
+# wQ4DumspJdmjSGkN33UAKkmrD6pD3FW0VMH0+RFGxHiyFLEo2Qza65oZXfaT30Pb
+# az0xM4Ty3CTjWW6vLMcWTGEaJ1RgaBP0/HpA90UdjUKSxrZJZPVZu1WakWaoyASB
+# XmKCmPQBjTyfW4kliBNX15JMKLU5hDG+i5rBNGfMeXQ6re+HtcnebW266gdyQdGb
+# co5pNYmd7NZ3JHYniYFJKM4CHCLrPg9+/8+M2UCeyjPvVvtPyomJCJE+0GY8V5qg
+# Ut/0boeM5EjEaHMY90kWGWHXQfJqCnQ2ZRHlptfc2811gujVDOxPFfQBO66VN/V3
+# kVs20V2YMACEhjRKLEuNbR2tsg2dnA9jADBKp/z3xz35LQ1Xm9p1lFyHQLoy2gn1
+# j515+rd3wD2sFf4hawctBNZ0p3hniO4rRrqTdo+GDdQgBFgYg066SqXKjI+AvJbk
+# wqf7GGNudFqgj9s=
 # SIG # End signature block

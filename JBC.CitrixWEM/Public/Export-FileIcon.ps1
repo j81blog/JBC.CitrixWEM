@@ -1,4 +1,4 @@
-function Export-FileIcon {
+﻿function Export-FileIcon {
     <#
     .SYNOPSIS
         Extracts high-quality icons from executable files, DLLs, or icon files using native PowerShell.
@@ -149,6 +149,9 @@ function Export-FileIcon {
 
         [Parameter(ParameterSetName = 'ToBase64')]
         [switch]$AsBase64,
+
+        [Parameter(ParameterSetName = 'ToByteArray')]
+        [switch]$AsByte,
 
         [Parameter()]
         [ValidateRange(16, 256)]
@@ -319,7 +322,10 @@ function Export-FileIcon {
                 # Return ICO format (single size) - default behavior
                 Write-Verbose "Returning ICO format with single size variant ($($iconBytes.Length) bytes)"
 
-                if ($AsBase64) {
+                if ($AsByte) {
+                    Write-Verbose "Returning raw byte array of length: $($iconBytes.Length) bytes"
+                    return $iconBytes
+                } elseif ($AsBase64) {
                     $base64String = [Convert]::ToBase64String($iconBytes)
                     Write-Verbose "Converted to Base64: $($base64String.Length) characters"
                     return $base64String
@@ -339,8 +345,8 @@ function Export-FileIcon {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCsPnpJpIeNZL3v
-# lbYLRWtpkBkZ0MiscKmrNoAL3JGi9qCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBt7tkMCIyJn/JE
+# UuWrSbOlBw4XLz0FRSQhfgIfMLNgN6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -516,31 +522,31 @@ function Export-FileIcon {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBjzTjJpaow4aVt3kEH2jyiLXyFUH7si2kdG5B78vaf
-# KzANBgkqhkiG9w0BAQEFAASCAYCrqcYA9m3EoGuK+vanB1S8TG/RKhMSqqJNvZiw
-# Qsd3EioFgqr8yliB+lIafEqjrHiW5uiAMohSxZVUD0fjfEz9OcOf88Ro8C2o2VtO
-# RHFuf80OJ/Dnsa/8VuGhBaapmtWb9suSs80fArER5QL2ISeaIdu2YajTJQ0uNqEn
-# joXSwIOudRBp5PoPdsYgETiH7yQZD5HpyrQ76ZPcZCsZcg72xj2IaCmp9slJ1POm
-# tXz43rUs8p94e+hTbpduQK8oiy4osmu1Fhz/8a3M2GKBagKPznG++gnjjdP3oBUt
-# hNJKh1Ppxk8RNzBmLc2+N2B102yf1lO3Lc9bh+RumQ0wXAFxdQht9YPXRn+g0mX0
-# w7wtH1lwcBOHCdoe8q6N6yduZb52cnWITSN8Yff+s0NCm59blneZwd/UDPEKjhO1
-# ZPO4oetqXXdIRMbNGriJdnmgTmMs+EkyiUfL9uVu3sqwGELEMs9bKWZwFVnSlkhm
-# TuO7sWpcbkgxr1pKUuvrhu9jt42hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCAhyxZT2fwa7ZSImMm4FcHUZlTy5AVAh0FT2tMFguI1
+# OjANBgkqhkiG9w0BAQEFAASCAYAyG+NTQNgppvMPBer3iG7wPCywLAbiMQiW4MM2
+# raMf5UEDgsM9JOeyj+dC95Kho9HoxGL6+PLnL/qHx1Gl6ru5JO22rD96rh+HZFSu
+# Q/dK6j+7gS2X4myCBCDzCFbmgW4NR1UQwsLrxSY/+zzkgx/zdyC2t20lDUkY3hZF
+# aZCtYSk489pksJqydMnKf4LTxsohbf6Zuvv6QaqFyz5W9nYA3F8fiO7iIOXs2XtD
+# zQfG+b7b0J2/BORi3al1dgbyZfenOxiHGBG3okFFjfuZvVHvOqAzxktrTu8bBn2M
+# 2F3EVQEuj6uevEwHW9U0QyF7+cZwPjZJWK1zgQbcZLDLUKi71ghWjuPFJiTX23dT
+# QySXQLB9DWAT42Lr2HzhOz4w6RCvCrOT0CHvjlkqOPu3HMm9mCD35KE4tm7NTV8P
+# FasrnA//3M/uQnDdeS9tPuqxpmRrOT+XcebBmJ3+1c9qCLfwcIWEaMu85NO8tuJg
+# YPYGVepaL/jwHGhXv5tg5PeMcjehggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTExNDIzNTNaMD8GCSqGSIb3
-# DQEJBDEyBDA5x82tNHsMxsya8ohHHSnSV3aPZdHJ4o4JmYRmnJ3BfFxZWIMNO4z7
-# phKkP+K4LVcwDQYJKoZIhvcNAQEBBQAEggIATei2G6bQnTUTEDnt2mwwuCICPHos
-# 2AAndP3nwynpSTcGIEGv2VZLLYnyDosnF/mPex4M2jXE5BkqEv05AveqOypDC/cg
-# tCJjXUqJVtCtQVyStUjFr10kCk1FSC3xrxv8miYz38n6opNGMhgJ+X+DPGmgUv9z
-# U8k2y6B8Z3J5PSSvuWa7FACAk1Vfb7TXU9Lq+//wj3z/7HTjgA8rdwloIQRT4OPk
-# OEn7GzUBkv49SyaBUJW+sdFxw1WLm3x5etn6BkgyTpor2LRlSSIIYG2B7avn23zD
-# OrVsun7LIf68rRyFkCRuHdWIq0WhRBZ0QCa0Bof5EEmAX8IPEc0qnTb1tTimwoFL
-# p86HZZPJmWQqdjmcS7xUhzhDeXDfQ1CzAh4gFzr9EiXs9K3RMr919KET2BnvbNSg
-# vAzxSZtsgUBPo8RymlfGlDMS0798EaOAsql62EfLXIeUKMn3S0HTvorURlkLSbjq
-# bmIiaC7/X0nCStkQpq88n6o5aFoVEvEylZrH+3pX5jgd5Lu9dKqyPp3SglubXj5e
-# x2SxTQdXMYtuhTDP5iVCpSgGTQBOpNlzZ6aVXO76MDXJPseqoGCx5kT72CMt/Fal
-# gPzrzuoN5TbNny+FYzj1YCHQxzJ+nIeS2yOa9CZrLf/IET/y2/PWpEnNEwvQcaSQ
-# Na+Y1PPUArbFLF0=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxNDQ3MTdaMD8GCSqGSIb3
+# DQEJBDEyBDDoTAj5DgE+ZPdmbxaFB05tFhCIISrG/jAtrJMIVkoa4QWQCj5eImv0
+# DcjOGNxnpmcwDQYJKoZIhvcNAQEBBQAEggIAm53iepPKTTNdKXfPiOrNrfSbuyYw
+# +fI/L9UqxjO1SqLqavnFc8IAw1q6DJp6zygx/xkIcz1Gbc2Fd/mp+9lnYfFTr8S/
+# ySH0zuQcxJj6dZQ31VRzQ23hUFBTl0y6QJtWSpPTBdKEONqTymUX72gbgb11hiBY
+# nizDO0xDaFXi3QwKjV0Hx8twlEEGhkJogPMFj7SYQK/pTGiaNmDwokQkeaZFnPpl
+# PZXAo3MIqA/L3hJO4vAVlVxduiPQwYgLC1rkXGQUuTqC0VBe4gcwQJQpa/uFjTvX
+# PqRzTl/rWQgu6OhJig8XvGznoe+yffNFmlWbXUwkuyPxpgW/noahbnVaVly0amjI
+# SbsXWzmvrC8YUaO0GvTNnIaqlDijE2GipFGrVI+OI9Zy17TfZQGn5zTnYR7b75k5
+# idayZ6Wv4VBpunzVTJ8daQhj8I49hfOr7nZDVrKggHxj/6Oosc7JbgkTacMITl3p
+# A/avOcyNVyBpPEtxoeEJ8cosJdbmdi4kZCyRqdnEVz/Lf6+2uFWRB0yTTeh2cmHj
+# APPzU+Y+LyXclyd1N7yPTUwK43xAMyr19e3oZenXj703wSyhJbzj16DTz0qaOT3S
+# 8OlVbu796xjgyJVUxgivKIrG4lxgBY0dLoR0l5gAVazs3l9g+MeXLDU8obnN1t/D
+# B7ohgYcDqh93w6A=
 # SIG # End signature block
