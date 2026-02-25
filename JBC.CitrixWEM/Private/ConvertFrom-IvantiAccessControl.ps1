@@ -39,15 +39,19 @@
         [string]$IWCComponentName,
 
         [Parameter(Mandatory = $false)]
-        [ValidateSet('Application', 'Printer', 'NetworkDrive','Variable')]
+        [ValidateSet('Application', 'Printer', 'NetworkDrive', 'Variable')]
         [string]$IWCComponent
     )
 
     $Assignments = @()
     $IsApplication = $false
+    $OverruleCheck = $false
     if ($IWCComponent -ieq 'Application') {
         $AccessItems = @($AccessControl.grouplist.group)
         $IsApplication = $true
+        if ([string]::IsNullOrEmpty(($AccessControl.access_mode)) -and $AccessItems.Count -eq 1) {
+            $OverruleCheck = $true
+        }
     } else {
         $AccessItems = @($AccessControl.access)
     }
@@ -61,7 +65,8 @@
             DomainNETBIOS = $null
             DomainFQDN    = $null
         }
-    } elseif (($AccessControl.access_mode -ieq 'or' -and $AccessItems.Count -ge 1) -or
+    } elseif ($OverruleCheck -eq $true -or
+        ($AccessControl.access_mode -ieq 'or' -and $AccessItems.Count -ge 1) -or
         ($AccessControl.access_mode -ieq 'and' -and $AccessItems.Count -eq 1)) {
         # Process individual access items
         foreach ($AccessItem in $AccessItems) {
@@ -82,6 +87,8 @@
             } else {
                 if (-not [string]::IsNullOrEmpty($AccessItem.'#text')) {
                     $ObjectName = $AccessItem.'#text'
+                } elseif ($OverruleCheck -eq $true -and $AccessItem -like "*\*") {
+                    $ObjectName = $AccessItem
                 } else {
                     $ObjectName = $AccessItem.object
                 }
@@ -128,8 +135,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBwFCLr47iVnJxF
-# Wvl//kVqbSTwpVo+PLtHpOBpZsa5P6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAzLkCYCrwxVdXM
+# G1tHOt3LMGdcrfb9HmtQk1ZQzZhOHKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -305,31 +312,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDgQLPggu/VLErFp8HMn3P6cilpjqJK++pqgd0bzOJ/
-# WjANBgkqhkiG9w0BAQEFAASCAYAE6IzcQM+sZ38TKKtn5J6sfS4obQzoxUIcBL6F
-# WOSNYm0qA1Mz4Fuxv7kA0ohkcSyAMyoQFyceDfMFAuKDKanMQ72T0cYybpks+79j
-# ag1qATTlBnKfp/9CEyvDkrLZM2osjLQCUVyK72BvmFV2RPJeLHRge/eka9GOptMc
-# MXShEii5C0zIbfyVs601xkb8OcdlPkYRPbeuonfupq2H9H17NUzUAOE+aPNQIrA7
-# ystm3S53cgriI3C9NeUYkXg7Fz6qa1YRgAjS68kpHxyhp5eWWbE4YI2jyIT8Yxjf
-# EYoYCRvfQU6Xe0z85lySqqTkUeCky2DP/4gIcQWFzYOQlLQDfP+orFXVgRUnARRe
-# Ta3XHSgq2ge6K8hHtRCci/AoO/lbtSyGIbqMXuDV5k3ERE7U9OU/s3GGO+83R1cE
-# ntoBn2LT+sCmNmk7ULpf6SSxS8hn5WNM+R1mO3b0M2q5qRYyJ9s6Tqgsn1j6T7tO
-# 5UfOSQkuhpbCtAVnBXy1OaRoi76hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDMTCWdY10WoMnM6s5hpa/D04VOXaMlqX78x/I2XnNx
+# 6jANBgkqhkiG9w0BAQEFAASCAYB86m+0KcynopkxO5hkbDqanMA+KgLeU+UxV5o2
+# OpGrnLMA/FrJJi3vqgcPH6u3zIXYIrro6AQPiJWmYn1PhSEP8cstk6EsL9x/1UCw
+# HnQOgBDbhuQrMpWIYED6w/2/jYCozvGjFUZkSwSLqg76Vld/beKsglUQvqt+4qjL
+# zAiB6SjYYNQu+w5yqwlBFKXAL0VfWBXukB0kXvurCvQvFgAZyjfAIkVIp8qvjh1s
+# TAJ4PZvi9eYlp5OUjdChQ+0ddIYrHJRGbih4jcmPl4aiIWI7HKIgVxmAppZb2Kkz
+# VK+1wR38eneVRBDgBOv2lt4fqqsevthdR4KJ9rz41R1rfDOYKWL8tXZ3xlwnuXnh
+# IMAb8Q/vQ+iGuD6IvkIHVt3eXpdgzorv93Od+W3FMTjtH3ZuATjJe07Vw1MbdBFG
+# FygkK/Cq8R2BQRF0RVEcstjDLKVLOo5j9Cufh67Kwx0u4S0Rg10klQ/dBfNbLo+g
+# 5x1uJTPHBWH824CS2FBv3L8c90WhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxNjA4MjVaMD8GCSqGSIb3
-# DQEJBDEyBDCfnkLFtI/wrfte/NtG6qTmmQtuvT9k9Nd2HN54m31FaInul7O6Ys4U
-# yeqebnam2KcwDQYJKoZIhvcNAQEBBQAEggIAWrg7EVvdsXEk2+3fvsBrjavQ7zvn
-# RqIMlF0mn+x6dO79rltxhvzs1+k037fPDDFYJTYgXHPTIoEu73+RBeN73yBhHou0
-# hSRMoONDTv1DEZOmMEJm5WpIT+hMdVK1NWTCmS7slKw9Pk7sB/V9e+1GPE1lpstJ
-# euCSeoN6bZpDhykAtwTX4DgLO2aAMbrq049Hy47mARzHqU6RextsUGiPrcQzDWBh
-# 9ez2qicWNR41NAAwHwdPK9Z+nBQmiVqOXJNvk5QCvy21iurj53j3+7WnN+FdEm0d
-# STxfl+0gMlPb62gGtdnPlFy5383KmcZ6LQqffFyG/iaW1L8cHy/rhbDeX1VWcuzh
-# UZhV/Nm9m8eU/D1x5kJOyaM6oZGbbz3mGSzpC7zxVdF6S7tqzoqWsLVYEdLRxybw
-# Pn5ZjSkXyyJHOmzaCZzOW2piKylmsgMUcGSB9UccvQScb/NPUAPgtbAdg88Hh+Db
-# TjW/6TYWdiT2rSIUa6E06SxNF5RRtFLQubyEfmNHYGgV8uymS7/te5Pz4Oi5kLhJ
-# jHNfT1/PAFS7jz8fFTKxp96k2mIh+Xjlrb2F9ivND2rN1qSiRqnw8pURSzkPitG4
-# i4ai63xaOzJcak5ghk+gOm7i639fRvCYCnPDKreiE1yE4RlQtY3rZPNpQIAcdKza
-# a7D0nDKWkSOWlAw=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxNjQ4NTNaMD8GCSqGSIb3
+# DQEJBDEyBDC/7br5WMEAPcUmPLRMFOVx88ZQ6G6Ty9dQBMe1dhpV2kDCwE+E3V/B
+# yROmqwOGPHUwDQYJKoZIhvcNAQEBBQAEggIAKxROLOV0FWv/fDBysltHr7sIf8Zf
+# ZvhUONvBKD7yaibspfgdDUIozZ9mpdvxGCvaDLABqqTig1XMIrS8YKujfkaDyOxl
+# MoKb+1QxQS4ISuSzA5Lv4XfX9YBJeP97xlqpUeh2l9NamWRe7dVJNiEv/i4IVJon
+# r6NYsqs7ryeEgpHQLZatc5buHcPJxyIX9ZzU4il4G6XT2QUeRCCXc8bS64Snj4iX
+# viEDvQU6stcMU9OvgAywZCQ1eKHNq9vI1kQhho33V2v3S3HImw2rbxvWxNvzSuey
+# PnKuxn10FkdIxJTmITLWtcHsV01B4b0X5QyjX4LO5SgI/FYpY/IDjbb8UxBmSjWE
+# hKESKCRiYONw2lrbTnGHOm0YU10sC96QEcRiDR6NRAzUkWXcBtZ0VaP3OyCKlIlL
+# iWdre+Dh13GZ3ZokldH2SOZCx5B/ZnRx5Ldt7RMZFbIeU65ajYVmIMA8tfcMCttq
+# pICPn0/Bx6Di4FDJP0SlzHnl8bongFKcDG3YzQES6g0UWxUwH9FzGFWmGPZG/l3t
+# KzCIuXVfFEKILvCFGW+5BKvyz1Fyc81E/wXzJi5gdFQWFZOpAPBP8czgrb3qminq
+# rizRdhsQm2GrQHd+0plw/1HzVdzCwLt7nvQJiNpSaWlvQ1XVK7QL01a9toX3bYs2
+# 3S4rPAKMvTKewsc=
 # SIG # End signature block

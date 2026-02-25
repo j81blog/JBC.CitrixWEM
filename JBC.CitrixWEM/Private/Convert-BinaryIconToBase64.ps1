@@ -75,11 +75,42 @@
 
         $tempFile = $null
         if ($isIcoOrCur) {
-            # Use System.Drawing.Icon for ICO/CUR format - GDI+ (Image.FromStream) fails on
-            # ICO files with PNG-compressed frames or certain color depths
-            $icon = New-Object System.Drawing.Icon($memoryStream)
-            $originalImage = $icon.ToBitmap()
-            $icon.Dispose()
+            # Parse the ICO directory to detect PNG-compressed frames (Vista+ format).
+            # System.Drawing.Icon.ToBitmap() has a known .NET bug failing on such frames
+            # ("Requested range extends past the end of the array."), so we extract them directly.
+            $imgCount = [BitConverter]::ToUInt16($binaryData, 4)
+            $pngOffset = -1
+            $pngSize   = 0
+
+            for ($imgIdx = 0; $imgIdx -lt $imgCount; $imgIdx++) {
+                $entryBase   = 6 + $imgIdx * 16
+                $imgDataSize = [BitConverter]::ToUInt32($binaryData, $entryBase + 8)
+                $imgDataOff  = [BitConverter]::ToUInt32($binaryData, $entryBase + 12)
+
+                # Check for embedded PNG (89 50 4E 47)
+                if ($imgDataOff + 4 -le $binaryData.Length -and
+                    $binaryData[$imgDataOff]     -eq 0x89 -and $binaryData[$imgDataOff + 1] -eq 0x50 -and
+                    $binaryData[$imgDataOff + 2] -eq 0x4E -and $binaryData[$imgDataOff + 3] -eq 0x47) {
+                    # Prefer the first PNG frame found (typically the largest/best quality)
+                    if ($pngOffset -lt 0) {
+                        $pngOffset = $imgDataOff
+                        $pngSize   = $imgDataSize
+                    }
+                }
+            }
+
+            if ($pngOffset -ge 0) {
+                # Extract the embedded PNG bytes and load directly - bypasses ToBitmap() bug
+                $pngBytes  = $binaryData[$pngOffset..($pngOffset + $pngSize - 1)]
+                $pngStream = New-Object System.IO.MemoryStream(, $pngBytes)
+                $originalImage = [System.Drawing.Image]::FromStream($pngStream)
+                $pngStream.Dispose()
+            } else {
+                # Standard ICO/CUR with no PNG frames - use System.Drawing.Icon
+                $icon = New-Object System.Drawing.Icon($memoryStream)
+                $originalImage = $icon.ToBitmap()
+                $icon.Dispose()
+            }
         } elseif ($isWmf -or $isEmf) {
             # Use Metafile for WMF/EMF vector formats
             $metafile = New-Object System.Drawing.Imaging.Metafile($memoryStream)
@@ -148,8 +179,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDYGzhIBALs7XpU
-# xaCK9kMJ3yXDtn2pBJv1QVdaRbsxJKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBBZMLOLJ2WkWA9
+# 0oILAsilUsDOQGXpPosyKj8hMaIObqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -325,31 +356,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBq8OAOar5aMpEzuaLqcsVQlWXESaBTyR6KRzFThZ14
-# BjANBgkqhkiG9w0BAQEFAASCAYACUjusKh5H65CHy0mGfUIhNpcGh4siRWvZDqUn
-# bBrS66R50EEiP2KtrpX8zq12jmVKJ/hdCTYhxbGXVMYruEEhWX22ITdYOvyxZWBV
-# yBZ0pUDFUDzOqZ+YleuTIyXvQGJVaYr2Z2jDHI8ELldyUsyza+JAK367PLyOaqRg
-# NLsVyo0aUYdAS7VxUtbJtIlx1HJp7X0dckAJjaBN6NIzdB8AQ1PdsAVP1wOhCF1E
-# qheTs1VQ5QfExAttxkLmPUnLmPVwwJl14NoL8vkNt1tH7rET01gHKOTA+uDlWic1
-# 7tdC/w6Pgt3nU+0P1WYvnCrpErjxzC3AQV3i7pVH7SXsXJGxpRC8OLAgDh7PSNzd
-# /Wimu8ZFdnKr7Ce0cf+ErFQlfBPUqTyoniNv4JPZaCcV66o3Ec+LOhxH2on4jMJ0
-# J2FEScr0OsAHb8ZUG7ysMC7BIK05y9Hpu8WI3gBhh7cZ3kLo4zqQXBMNOI5mhx3J
-# wNYrCA92bh0GlyvF0SH0+Ma7pKmhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDeDOY0zICjMA1oymXOVQ3PKGHIdpNlHeYBWsCjOdHw
+# czANBgkqhkiG9w0BAQEFAASCAYA7gaAyvdLSFv0kdRM5QI9IsElErPoapKdBjZxE
+# bSAvSPGOTDF9xclUKxdUBiNbEQLpxdUbH7bQKURQ1eaIwEuWTE2lVizOUgEGxihU
+# 3Bt5p4d8++h2z6rPhDEkJo7icytD/zSjnX4kDJVYNykOZ4NAsmqNmY7aBXv/S6R8
+# pc5h2JPpvrYiJI+CRGIeGb6oay29dJ+lIc1QaSD5mZkfxXU38d6/opiCo1MfdJAf
+# 6ukbHKMUPGxNXaeG4zep6LbJTWtXWJKKC+eFBTnzPNk0hI7XBs4UEwlFUsBs3ZEC
+# 9WENeU9JdhIwPM3dckwLr7BajfN5iO/Oa7wTBoXr76SeMoAqPjFbHQ448xPaYVzE
+# qbuVUHhri3UgAOECnLuiKOlS461VqqcXeiHFEWeb/sAOQz41t3kI0UivQMiilAsP
+# tLWRkzElZAt11pNSiYfF8guOw4GXi/PTcbzAmvBZve7vMTVds5q/02zvkhiiDZsh
+# eWKQNOceJoOyd/iO0SykpBFMc3OhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxNDQ3MTNaMD8GCSqGSIb3
-# DQEJBDEyBDCvsbM0ruO5NObC3bqdepRa5ld6cljc+ZLjzYRk+umwolmxqAIK4Tig
-# YkiqzTBKIhowDQYJKoZIhvcNAQEBBQAEggIAoyLbyDBbd+elpjo55De+Ha1m3rFI
-# ddrdOYittDu+sf7qJnvEm6VtHjsyrC/h9GzQHe6JpBBN2Il/KJNSD762HBy4ieAW
-# o047hRRyIVcyuSWi/96fukvq3mBH80B4nY0aibwyjhqN0qSi+xAOphFYFFkt5Scf
-# eSNRIU1iPal3UQTp8esWARqbkVC7bP1kk+NuFkgVScEBKDhLtUOQSxiSODDPM24f
-# wQ4DumspJdmjSGkN33UAKkmrD6pD3FW0VMH0+RFGxHiyFLEo2Qza65oZXfaT30Pb
-# az0xM4Ty3CTjWW6vLMcWTGEaJ1RgaBP0/HpA90UdjUKSxrZJZPVZu1WakWaoyASB
-# XmKCmPQBjTyfW4kliBNX15JMKLU5hDG+i5rBNGfMeXQ6re+HtcnebW266gdyQdGb
-# co5pNYmd7NZ3JHYniYFJKM4CHCLrPg9+/8+M2UCeyjPvVvtPyomJCJE+0GY8V5qg
-# Ut/0boeM5EjEaHMY90kWGWHXQfJqCnQ2ZRHlptfc2811gujVDOxPFfQBO66VN/V3
-# kVs20V2YMACEhjRKLEuNbR2tsg2dnA9jADBKp/z3xz35LQ1Xm9p1lFyHQLoy2gn1
-# j515+rd3wD2sFf4hawctBNZ0p3hniO4rRrqTdo+GDdQgBFgYg066SqXKjI+AvJbk
-# wqf7GGNudFqgj9s=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxNjQ4NTBaMD8GCSqGSIb3
+# DQEJBDEyBDAyBWdJkJHBoz2CHr+6kCt/pgCFE9Nk6Jl/N5o0RNNEyIem6SAoYOYj
+# q3QD3YED/IIwDQYJKoZIhvcNAQEBBQAEggIAy+zEhMkDm80PgFikmkckN3w3i+ev
+# JTr6B3uTBsHcq8Jcq3ZqRE+1svB7kMuIdSeVyWOD7I0RAdlq8aAN1a9OviIQUTN0
+# 4MS+zDj2fle7nMY0uVIzXx7zMU4WUazxUfr+1Avi2K6L94nSnZ3LhuFvS+eO+1T6
+# h3AOJkiV6YOqDcmwrcmaj0xkChUsoNDnzfXC3znR9TRiG2epYPtipYfIPqlgSNP1
+# xtEG9Rp4jYSHvrmpFFkPLr6axGo4cnlRwwpJQkitn8SWuoX6Vm4woC2JUL/IanwJ
+# KeDWyARGy+LM7CPmX/XNXXI/4HwUBrUuBYjic6KvAFSJOscNdwI814aFdmeqLUw+
+# 4+aNxjomuUNpL39TahRYyVguRPMLJdeMQ+noD5tAKsaOLk8EFblkBw7pkZCNnnhp
+# gm3tH6g5o7k4C9vuVlMTG/7Zx8Vk5BYMrWxFztDbUXyByalIBUJg6XMvgGL3F6Nh
+# 9Pv8YjWpAZKU4q8eFJvKssBAr6t7nYzY2aZDzsW7wOFb82cf250g4fEuwl8Aj0t8
+# qJQEQhpn/Y6bPUOqWzvLR9D7F0ZdmpCYgPvnYIA69S8IWrXzYh4QE/dqdxf9FTxt
+# txFP55f8USH1Wvo+1uKh6cBUL8xRLFHgQxQZlUaWIChnExZHO62XPGp0d/BcGst/
+# mzJVOUwh1meXWUg=
 # SIG # End signature block
