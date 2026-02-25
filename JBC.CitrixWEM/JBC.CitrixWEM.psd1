@@ -12,7 +12,7 @@
     RootModule        = 'JBC.CitrixWEM.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '2026.224.930'
+    ModuleVersion     = '2026.225.1500'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -27,7 +27,7 @@
     CompanyName       = 'John Billekens Consultancy'
 
     # Copyright statement for this module
-    Copyright         = '(c) 2025 John Billekens Consultancy. All rights reserved.'
+    Copyright         = '(c) 2026 John Billekens Consultancy. All rights reserved.'
 
     # Description of the functionality provided by this module
     Description       = 'JBC.CitrixWEM is a PowerShell module designed to interact with Citrix Workspace Environment Management (WEM) APIs, providing functions to manage WEM Configuration Sets, printers, and other resources.'
@@ -181,8 +181,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBY1H5zr2CRLIoF
-# xLfMvzN75xd6rd0b9YP+oMmZ7Q8a3qCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAAoXNjTnnKZQxO
+# /cKClLeFtOGl+3385IMy1Od69XJZNKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -358,31 +358,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCA3GT3pk7WyDqSjpk5B9EEUr+RmN4qWGo4mQdW/xuro
-# CTANBgkqhkiG9w0BAQEFAASCAYARI/Qnzx1m12vTqzxGCNF8LsQsBGpIZJy/MzlB
-# NLBmhv5Ts5/7R4hQSf6+w2gPfpxQtgXtzZa+FvXhMK4Wy3fKgwDOl1BxdwjOPAhs
-# no836XhJAFam9ac0uFWoAAi8Egp4kDmGa1I5SnbuUOXVY9LZtw1R5DtwD/MM6JqP
-# n73aouIQKYey3VGSV0cjKLeXrwYEnZHG2IpwxnxRy0GTHywcASkLGPgQAWDGEROa
-# 85evBoh9IyvO7tfsFRj4j9KstYpjWqJY07xbgd70aHE/sdWUWavbwVnRo/wbvXo1
-# xBZHjt3zNExOJ2zC8caA8ofi5tseMGwiQv2Pt9XAf21FeIAKCvyuTX66kepRt0rT
-# jpSPlcFVVwXnIHEpX08m0W2oHBikelxZpVKLFn6OtuOizv2+oTM9i8erJJpZQaAn
-# ExO+LDjN7pd2jydtCRx+eAHNtcvNa18rYgaeVUO57Lm5lSZCfYqbZeaLX0amiKHR
-# 6wBp3ksgJXM7uIXo6X6GgU1wRZihggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDj4n1gwohJ6OAAgPOpqgWaXx+aptvk0w6ByFZNpm3A
+# bjANBgkqhkiG9w0BAQEFAASCAYA+lOuaEF91EgodoiQz6G4a5HF354EIoxjIkQXZ
+# opiyoqvxPEzgYaWxTPZhgDMtlYgnUrvwN1be3E+NAOvON7s7tPsfrE0FKxOkkEMT
+# xIwycpTPLL7vcSsiQy/KN9ZTkWwc8/HUJ4mWgikyEeZ+DyUNhvavMdoGnxqLfLWK
+# SeAI53BvluTQ2sdyl79GdLZd3wlDCSJFWXOI20cgGepySJ2Rip1Q62erXM/kARGv
+# DgalD/FvFqgR8n4YjcnzKmWyYlu807e27Uq69pO4ajcRmudFbMT1AGauuQozOzgj
+# rUysDSFCSj0iiH0URdVrZVdoJ0Qfkf+fVK4ygBwuyu/4a093J9tbKcCWCZgFbJpG
+# 3/LbbH0K3h21xDIiV5JEKb0LDrrqkmgA07hhmEvWei3TV6Er2hdWNv0JRtuv/5hL
+# ErtwGExcB7BYp4koVkUH+a2BYEk5RjJY+YFDheqd3HjjRu8ROInVndKrQtkQSvTv
+# 12xZuTAWCqVBrMetH7nFHQgPk6mhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjQwODQ3MzJaMD8GCSqGSIb3
-# DQEJBDEyBDA0whzdGquVRoR6QvysXT//y2KBBki3UV2p/vID+DKXfBD7ToO7LUAM
-# UgGgyfLpYdUwDQYJKoZIhvcNAQEBBQAEggIApPKohZQ8eT/GgA8hdD83IoMQwFfg
-# iShJJYFGsBC4N+WYGxdMgQk3o+KfxBA2SoDhaK1Nbu/MLigYbV2lbnIQJ0Xwq226
-# mzcg+bzRcPKIAk/cxL5VwMeD0LTOSe1hjJppEU/Y2dl+VR1kkBLrzR4KVHH8SiIi
-# L3g+FXWmUFniLBb8vZ4WJAKoXYWKQ0b4xjiccQsWQRHj5pCeglhkgtm1oUgkYEv+
-# WQa9hCeD5y7lV4vbtU6owRbBHU+vUJlRyGp7nXDOirZDsisDuKTPhkN6Jni5eu9D
-# 8IUodKR8S107fIXJ3kyC1FXYfYNL1XIiFkcS3jauvV+iuFwU043CBzma4PXsKt3K
-# cWEUekVkxv1yxH3rvI2Xjxa6hD8rEpTDQr9LYGVrm8WITHBfxUdzk2Tc03ZI5qlw
-# A8hLYftxLcf858IzOLVrkhYzRzrwhZqJ+cmYquZf9ff8CwjfqFPryvJxl/w5MwWO
-# ce1+5AF6WctrEFWydyNzjfGa/Q5uaRjX6MUd6r4rzPNNYfYaV0mDzoaE6rn+3eGH
-# G2yQn6LIdZNaHRXoFM9wihY3gnFaeXl7cCswpWUnE1/HEtsXAmPkduIcdyXj04ZW
-# qO/Vp4Y78a2vQVl76Wt/JUDzdP4oceu+a9aWPCQy0P9qkvyqI8vU0H9rAD+atY6L
-# 2YVYPl22sgMBkmQ=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxNDAyMzRaMD8GCSqGSIb3
+# DQEJBDEyBDDgR2HwvNCzMX5UWQNs6sZItzVg3SI1Ke6g9FJRbseKQLW6xtMfnjrS
+# HD/F477HuyAwDQYJKoZIhvcNAQEBBQAEggIAlUcKu65JkIMgvUJd/dEmgaGIhvCj
+# UM1QKa5GAg3fzkfWPauvhwc3BUAmovBbSvAYAnHonuJJaKmfnYpw1Hdsd/zo4kz2
+# SPyvdnQdBbuH3IMapNGlPyDcVzt52vJ1UEezTKctIDlI1uk+lfW04pHX/b0Vqc2D
+# jaIbmCBMROPyFYkcWZTvAz5ilvBBzPKZyWNFYQiroy23f1JgxROcrxWYH5Mf9lIB
+# V5N1d97jq4sK82yl9Coew7C128DGK8HQI8BYKAzyiFAOcdthRqwIjAZoPKL7zdac
+# WzKnnHA+2Z2SVmqEkIszNbtldG5GZQri3EBpZP1qvvViKHE9MCdPFvRom1KDNoNw
+# IpQU4wRBXMXmhx72rcK7ViJT/uAyVVRynouTvyV4cwIkdduLK0jof3sFI6EZLtUc
+# AIe5DbUVyt+46JiwUjkD+jPmDyVhQzL6drB+Djzskkr5A73YI4YOMNPVDNzpUr+H
+# UTV4xpJvUoC1L5vlrC51t5Qr88JH/Pw+5AGzHhcmUtiGC0rrrEjNLdp2ywUzSp9L
+# Cdew5Xs3JXSyabjwbZZXg+k9/Oca+Aznbd3C1/mU1uDyrtvc9mJ2XxR+hVeEyDjm
+# yW58LSobLxLwqLF+EBr8S2+rDAfloLeHomHCQ6U1xjfUp7l5Lx447k0k0B3b9Q5/
+# gj5CQZZbfHeRa9A=
 # SIG # End signature block
