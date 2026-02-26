@@ -1,4 +1,4 @@
-function New-WEMAssignmentTarget {
+﻿function New-WEMAssignmentTarget {
     <#
     .SYNOPSIS
         Creates a new WEM assignment target from an Active Directory object.
@@ -111,11 +111,14 @@ function New-WEMAssignmentTarget {
 
             if ($Connection.IsOnPrem) {
                 $UriPath = "services/wem/users"
+                Write-Verbose "Creating WEM Assignment Target '$($Name)' in Configuration Set ID '$($ResolvedSiteId)'..."
             } else {
                 $UriPath = "services/wem/assignmentTarget"
-                $Body.name = $Name
+                $bodyName = '{0}/{1}/{2}' -f $ForestName, $DomainName, $Name
+                $Body.name = $bodyName
+                Write-Verbose "Creating WEM Assignment Target '$($bodyName)' in Configuration Set ID '$($ResolvedSiteId)'..."
             }
-            Write-Verbose "Creating WEM Assignment Target '$($Name)' in Configuration Set ID '$($ResolvedSiteId)'..."
+
             Write-Verbose "Request Body: $(ConvertTo-Json $Body -Depth 5)"
             $Result = Invoke-WemApiRequest -UriPath $UriPath -Method "POST" -Connection $Connection -Body $Body
             if ($PassThru.IsPresent) {
@@ -132,8 +135,8 @@ function New-WEMAssignmentTarget {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCC015BIUrc2jdxP
-# FMvqwopcPElbUypZ2BVwDVPfOY2BZqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBjisht1c9JPkO7
+# ptotDLyBNi/1pzjaV8yCaNI36h0SY6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -309,31 +312,31 @@ function New-WEMAssignmentTarget {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCCCiWOWAwmm4BAYgv/GCRw/BYw/vJwRFLMU+kzFXr+I
-# 3zANBgkqhkiG9w0BAQEFAASCAYAeoM11NDW41+7DsNXNHP+1rOirIM8xUyTDJPc7
-# FdHgly0Ebzkwj9SgjFi2M9JlYPhDRQLaceymj2PzF7U+LZj5i2IYUe1XmTHfbGLx
-# NbDRhaJxrGfBK2Y/MZiuVWsLn/KjrzvGJnWsfdI22B2A05BRZ0FlhcW6B5QkH6Pz
-# yICZZelVPU9mwBeZoIMG80pz2VQBy52tGCKlJGAg6eWjBlP1aNKjnxN7flRhj9lZ
-# wnoPD7Tt7BIMJppZ2csdbQD7GQlBAbCHllWHKP548eyFREKYjAA9v+B4QGYJHzkg
-# EN+MhApjoIdsXbTflhmOUWyZpMptIo5hIhtxTB1lLn5BtbNKrKdgV5gwq0s9yKq/
-# J/L/D01w8WKsU0UMT+WY3WbkcKtqsb+SmogtmRf8B3AlI1gmK04/x+Ex60Bpy7/E
-# QEUSrkc7s5NAQMNl8b+hQADdAqFDry3Nhdgixl0Lf8lFySQn3xZWjvS6iyScVRvy
-# g+ZmobDWrqpYcUzTFC8GAq+kFAWhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCAIq7H5pI//c6VDosimp+TSbTUFY8oVIBIrzhf3Wpc6
+# fzANBgkqhkiG9w0BAQEFAASCAYC7yx3BJLBuxyG1WDu0Y6UuQ3kC+TGToieajeUX
+# yh13wSafIbQoakNkBfnJ21ugMRtQgV4oMOpLEWzvU8xOaGVpwrVt7dl1NJjsFDfa
+# swar97fbGMSh7yfqWrpQ0S8bkixoIobHxnlNtqHnhwveHXuTdii+Jj9Gcz+uLTgH
+# 2e0vCOU1ccEvwTSOl4ony25zrHO5aiMPDNU+iaIDVi1AizsbBYqjb6prUjG2meGd
+# OCA6nVkJaFlQd+7HtwQjjlIZk1COKDbZpx2MoLf0whcwEOBUxTqgM7OErKTlK8F4
+# /R9Kll4dayCKWURRi6wBQyAholiFw0UNik9yPjkbTJzjxjsNYwOrjsTt6m5hl3fr
+# D+SQbiwutyj5aR8QTA+gurbaVoFCYW83VVCQt4MTaaU2TyQtuHM+uftEC7nYY4IM
+# N92rOixNYfo19UqpLnLu3Qwt7z+IdJxlDDZzyeAEpTwwK0H2uV9JAeBRt0KD2NL0
+# IAwEmYrLIpwLzyT8yR8WhsEjrJqhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU4MTlaMD8GCSqGSIb3
-# DQEJBDEyBDDixhH54O6hXGkCe0ai4Dez1rYBNCnkqg4gDclINsd0NUBH33/WMt8J
-# rsGSmJKjs4kwDQYJKoZIhvcNAQEBBQAEggIAzjZWn0d0aB90c2/de67Fq3/jPlqK
-# +KpTvoqpfseOzvmmgikh1I6iQr3oJbOP6CHf2gfHw9qZXzl2z/IBCu3tpKY6W2Cz
-# 2YZX8hZgcrWo+SyquL8l6T0dJLvjWO0K9aONzLedfl1pVRS+829va83SJTwsQfqD
-# zpjsJklTPGverc/celrUu+0oi3S8HGCXSOkJCVlbfUG6DfP05NA55Rn1CFeOzHGM
-# UMYrcGVCDup6Q5cx7KEA4OOO9xTs01LNvz7p6A9Zw8hyOijcHLh3iJOSldBu+G0H
-# orMJ9jeKuzmgJnd9g61wPbSHsF8dXE67h44om6TTTb0yx7/ZS6pvnZh6xkvko2qq
-# pa5RuzpPlGDnAspBg3ypGT/tDu3glDkpvSCZmW7ehy1xGWV682JFXBAD0lEJX5vE
-# UvCiHf8DxXWW+B/flxHpGNsZFg7RZb4kHdGT6tD9ZPG6UoGsaWPP0tNUwi5C4xx2
-# 0oxzUeguCrAvCfiWH3XmLdcTHcd1jVf2OPXRzONmf/0o3FTvPIWw8m/F6+gchmRj
-# nunSHenjqUf3XhzlESF/z4diN2NOahJxISwb6WPClOCB6crUXeWj/wxSqU0BZlhU
-# eKixYklpZ/aO26PmrhdH/AFP9NWYE2WFCBwQhbywNhrMV/uDT2/Tv1D5dmxXLnrg
-# WGJyeMjHHiId4nU=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjYxMDM4MzhaMD8GCSqGSIb3
+# DQEJBDEyBDDZ7mcbol9HpCZT3+lyKgJUN53c+FZ8c57lNLVFZ8ZSLXgdqZKgl/A1
+# 9aAuLYlmTeowDQYJKoZIhvcNAQEBBQAEggIAaAY7PmZsf+xNVpk4HOo2ODw+8IzT
+# DeHux69pj5lxdzOM3wfo4M9Mi3UZWuy6EZuK9FpxOn2DkpXszDQsqfkmeZBUa1Kx
+# TCMKJpihvhV3p695x+mGi9CY8bb4n0UNxzwY1rYVj1c0jPdsCHPCevPhmiDMQR36
+# 5Rvm2zTYlHv0nLcrBUP0A63TadBEDSHJLLXPluwcex9bYVLkuxGNVbsQ1YGtbKi1
+# 8+EQeUIS0E0LZUt072TEfwbMesdru2opEW6z4Hs84KDOZLSusQbeyAbapE7XSsxx
+# /6+Gk+YaopYSJR2FO6Kyf9iJWHHqTcPVZB2/ir3pI+C7cCoKjVwUFu99lxpd3mwu
+# yJHuHCnAsEDSXtv7VBczNyH4LiB2AHcXqOMn+fgDOqdIM2jN5AgHNuSnTW4nE21a
+# y/vmwx52riDQg8t2/4RqUbd6X1H9OpEhLguxFXYmsJjXU4iFWJevUpqrozZUzxLf
+# 1AOX5HiwPyz4ZamkvPRi7tq/eJ9iTI+qsQskay4zub4Fwwn+EdgnXMlXjdNOi+l8
+# vD4LW4x8reC5m6nujG16Cpn2TMbXXblL68otddLFagiYibfuI/wL1VmroMCn65qQ
+# o7Wy5Jxe2U3xLkKTtrVKAWnnk9sMC84HNb1Q2YPzYa7mMGU8OQEJJzn3t80D0cr3
+# VngqKekxFUyC+84=
 # SIG # End signature block
