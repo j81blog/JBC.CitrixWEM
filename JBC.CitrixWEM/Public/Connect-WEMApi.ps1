@@ -259,7 +259,7 @@ public class TrustAllCertsPolicy : ICertificatePolicy {
             Set-WEMActiveDomain
         } catch {
             Write-Verbose "Could not set active WEM AD Domain: $($_.Exception.Message)"
-            Write-Warning "No active WEM AD Domain has been set. Please use Set-WEMActiveDomain to set one."
+            Write-Warning "No active WEM AD Domain has been set. Please use Set-WEMActiveDomain [-ForestName <ForestName> -DomainName <DomainName>] to set one."
         }
         if ($Script:WEMModuleConfig.Config.ShowWEMApiInfo -ne $false) {
             Write-InformationColored -Message "`r`nTo make changes to a configuration set, make sure you select one using" -ForegroundColor "White"
@@ -298,8 +298,8 @@ public class TrustAllCertsPolicy : ICertificatePolicy {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCD3VaHWTwYIBldt
-# v6oOu5G0JM97XoU/X6kf5g4lbjy/uqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDT59IVMyahBdHx
+# 0+SI0lRd6yWn7khowBTpljj1Van7aqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -475,31 +475,31 @@ public class TrustAllCertsPolicy : ICertificatePolicy {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCAnwAUMvdUgI9RTnW/WtuEm49XfJiGbpw/xPCuRy380
-# tTANBgkqhkiG9w0BAQEFAASCAYBXjofB+sTd8pDND0Abw/+ea7tqg2OQzW31hMSC
-# l3oUuGtVPrQTR0v9HYDvOM8UkeuD3MpfnxT9EM9KbSJekkVs9qcLflAv9FeygSBo
-# 3mZpjSWkgP17d/LsuDgpIaoFGePPVPs39BzIAwDzyHYvlpAImIg8itTAefM3lVHH
-# ETlu43FjQCYOQZYT+JOgUjlLeI205hX68T4GgaGPjvFtOOjStaW6Pqr90/xrWG3g
-# sStcYvrZsMIPemdzAjWNO7RfAgU3QejWAZLH3Kqb5DakTx01wDMlzzk8NMNzDwlw
-# ToFvds2XGXMJqg9iTnNsO9QwtlnfkAWXkW2bowG+cXh4DnI2lsBIM6c+86lEOV6J
-# TzLWfgJw/cDQnHd33f21xhml0DWmnKuG83DGbe78csfcdnfw4U1gECDXpzzwAvC5
-# wmAJzSFfb1kAKtHeLkl8RXYBVzuAxKh76l+Cgo0wwdMkepq3v4Y8kkLlWaYBNvAg
-# 4V/ptH0BUGZov8YOkxxEtAxZnkehggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDsVdnA2ZPrk5EE04tnsArxrQS2Ic5DWOmZ6hQTO+vr
+# sTANBgkqhkiG9w0BAQEFAASCAYDJz5xnZHcTGsdo4V14cTBBB2HfudItYxRqEzqN
+# 7eismOOpIIgGCPg2mLVGZBvukuDForFwdReOpATVluGOIbq7Pp9wCxcrSfBn1n4j
+# ry18hDQbB/8tyr19WovEqGks+9wVQJqLYwjama1R5vkHjhxMq5ST449qexNeX34W
+# rASWj4to6DXuZOHwVVefKNTpThBMLBDu+JKZMelKu7bfW18u08j5/YEcjYT7Uver
+# S5/M/c1SoYs7zexKHdbsxHBvDe0gDd7A0hLZMTjmeFd/zSI6BUUouN/Gaen8qLoT
+# WOyJwTea3SDHMRZ7k2XUGfa+DJ9+zCqc7UnIz2QEc6VK7zkaGjWrsaoFf81S6j67
+# jc8nzzBcy//jOdjgOguxfE/u9dGJ1CKxZQ9VxyWR5tq498tV60rvHtwXppy6pBu3
+# ePXLgMrz+DBJv55vtx3WELcsTsJU8JuBjunoc0wBiLuitMyI32oF/4d5kX5GVKdg
+# /S5R/FrV7NSgrbSVPxIqvjvyAUqhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjQwODMwMDRaMD8GCSqGSIb3
-# DQEJBDEyBDAHlkURrzaw53zXjc1H8w18BVznsYvmjmLe1n8PoMum9TyG2K7rUf2e
-# QpN6kgk0KYcwDQYJKoZIhvcNAQEBBQAEggIAVtEu+AUut45vft9pZzTUldJh1kHH
-# 83DZ7HHrhJrK7F5FUn8MewN/mVF/vsyNHpMv8P+kE8IVvAs855z1Gk3WjtDrinw8
-# /DbC+MAbv0C2jTYbPNlIsc1CjaAJaf8iSmfEF3hIHjCnGcZXHpIENJXeJsxmi7Cm
-# 6GFhujmQlOs1JdaE4iexm/f0u+DanpG/AXnU1xvjKuEnReC/6+O2LsJBCE30XDAl
-# GfQ6sKi8wu93ScfeMea3Ela63/fJw0GkhQKm+Usp9kZuK3pFS7cL82UgnIKdJeNW
-# e1EmOlhUoHtiNYeIqXdRrG9OrbJKMiO0sErKM6cUpAwMq5iPN2ZIAMqXKJgL7HJK
-# brhrNoI1hY7beO8UxtJZ6PMV9xgeKz7mE8qJgPCaQsYl7fHlIU5uy4ty9Ip6dLhy
-# MC39x5LKftagav69mU8TOwlxKa0ABfIh7dZeyvKPmhiSa9Oi/l7H0jr2onMMX0nv
-# 1gCfbtbMuJLk7Pq66bqnzY3OXPrFV1mSPMHx77fPumXiO+/7d8jiIE38hOHw/hoz
-# oMEfCUJVwE2VoYyQMZeFyIScL6f/2KZvTUZdtYPTf0usShG+yoDKrG+Qpfpe5XJs
-# O6TFRMO1oE7lGzj2ku5X3YmtN/+igqq0ex5Jpd/o8vsjO2/Njj+pcHY6H6hFwhRG
-# esznDLFexCVbtyI=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMDMyMTI2MjJaMD8GCSqGSIb3
+# DQEJBDEyBDC0nXh9z/mPCk2iEVlq8tjec11BnxAC5QYltAXCFueOrXg0LlC5pfSk
+# g0RNfcQdl/YwDQYJKoZIhvcNAQEBBQAEggIAUBzUCRej7qvIY0GH00iA6kSCLfDg
+# /A0ctf3yYzkD9T8EOVwI1qSTzRiqFXAq1wBgQDiBvqAgu3xQ2Ljpf3efu9YxXp/X
+# hhpqp0EdSEg+zBIAHsAZqdQKQ4v17lKiqiby62AphKRT/wNdqF1VbIKHTzA+mvDl
+# kZPBjRn6ygY9bNUtD+4uysSnakRwGOQvkU/fYFjoKaYtSeM5zi69Eg+ShH8mxPtU
+# we/euZySoIHHEzyBAh54vn2CW8Em/T2bkDYm6aluc+YMJOBSnvVRxX0pFiEKDtup
+# hBz4nBZ5WLJCcc/Z2/kJvlq4O+JserPNTu6I+4NnePd49UFZISdmUzShhrWcHg/5
+# CUcZwZgzXOoi5TkJ8crEkmePYMBheROxglzIFHEs1H2ygth1U15S7F8RK+pTT3q/
+# 3/FDjmt+EdPGM6Lrzd255Hi9ZBjFUnMew6sWQ/QcrR4j+hEt67s25n3tHQCydW4G
+# iC6SYUlh5douymIUa/yMaowF/H37w5h7eqUwd8xw3bufbbnJxq41qfuNUlRiyV/7
+# /W/3ecB4vW9bNG08gFrb0CDa7jaGFjqAopgkFE5q7U1AQIyF0OiIlrxWNxlMl2K6
+# IR26y7nrY7aFnNqZMd2bL6HctMePYX4tsvsHk40Zkhbad68Eirqc5/974y7WZ1jP
+# ch+Sn8z8+NziIgw=
 # SIG # End signature block

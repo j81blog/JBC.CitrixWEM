@@ -23,130 +23,148 @@
     if ($script:WemApiConnection.IsConnected -ne $true) {
         throw "Not connected to WEM API. Please run Connect-WEMApi first."
     }
-    $Params = @{
-        XmlFilePath = $XmlFilePath
-        ExportFor   = "WEM"
-    }
-    if ($PSBoundParameters.ContainsKey('DomainFqdn')) {
-        $Params.DomainFqdn = $DomainFqdn
-    }
-    if (Get-WEMConfigurationSite | Where-Object { $_.id -eq $ConfigurationSiteID }) {
-        Set-WEMActiveConfigurationSite -Id $ConfigurationSiteID
-    } else {
-        throw "Configuration Site with ID $ConfigurationSiteID could not be found."
-    }
-    $itemsToProcess = @(Get-IvantiWCApplication @Params)
-    if ($GUI.IsPresent -eq $true) {
-        $itemsToProcess = @(
-            $itemsToProcess | Select-ObjectFromGrid -Title "Select Applications to import from Ivanti IWC" `
-                -ColumnsToShow @('Name', 'AppId', 'Enabled')
-        )
-    }
-    if (-not $itemsToProcess -or $itemsToProcess.Count -eq 0) {
-        Write-Warning "No applications found to import."
-        return
-    }
-    Write-Host "We got $($itemsToProcess.count) applications"
-    foreach ( $Item in $itemsToProcess ) {
-        if ($Item.Success -and $Item.Success -eq $true) {
-            continue
+    if ($ActiveDomain = Get-WEMActiveDomain) {
+        $Params = @{
+            XmlFilePath = $XmlFilePath
+            ExportFor   = "WEM"
         }
-        $Params = $Item.WEMApplicationParams | ConvertTo-Hashtable
-        $Forest = (Get-WEMActiveDomain).Forest
-        $Domain = (Get-WEMActiveDomain).Domain
-        if (-not ($Item.Enabled -eq $true)) {
-            Write-Host "Skipping Application, Application entry `"$($Item.Name)`" is not enabled" -ForegroundColor Yellow
-            continue
+        if ($PSBoundParameters.ContainsKey('DomainFqdn')) {
+            $Params.DomainFqdn = $DomainFqdn
         }
-
-        if (-not $Forest -or -not $Domain) {
-            Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
+        if (Get-WEMConfigurationSite | Where-Object { $_.id -eq $ConfigurationSiteID }) {
+            Set-WEMActiveConfigurationSite -Id $ConfigurationSiteID
+        } else {
+            throw "Configuration Site with ID $ConfigurationSiteID could not be found."
+        }
+        $itemsToProcess = @(Get-IvantiWCApplication @Params)
+        if ($GUI.IsPresent -eq $true) {
+            $itemsToProcess = @(
+                $itemsToProcess | Select-ObjectFromGrid -Title "Select Applications to import from Ivanti IWC" `
+                    -ColumnsToShow @('Name', 'AppId', 'Enabled')
+            )
+        }
+        if (-not $itemsToProcess -or $itemsToProcess.Count -eq 0) {
+            Write-Warning "No applications found to import."
             return
         }
-        try {
-            Write-Verbose "Creating new WEM application $($Item.Name)"
-            try {
-                $WEMApplication = New-WEMApplication @Params -SelfHealing $true -PassThru
-                Write-Host "Successfully created the application `"$($Item.Name)`"" -ForegroundColor Green
-            } catch {
-                Write-Host "Error creating WEM application $($Item.Name), Error $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
-                Write-Host "Script Name: $($_.InvocationInfo.ScriptName)" -ForegroundColor Red
-                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+        Write-Host "We got $($itemsToProcess.count) applications"
+        foreach ( $Item in $itemsToProcess ) {
+            if ($Item.Success -and $Item.Success -eq $true) {
                 continue
             }
-            # Check if Application was created
-            if (-not $WEMApplication) {
-                Write-Error "Application $($Item.Name) not found in WEM"
-                return
-            } else {
-                Write-Host "WEM application $($WEMApplication.Name) with path $($WEMApplication.TargetPath) created successfully." -ForegroundColor Green
+            $Params = $Item.WEMApplicationParams | ConvertTo-Hashtable
+
+            $Forest = $ActiveDomain.Forest
+            $Domain = $ActiveDomain.Domain
+            $AvailableDomains = $ActiveDomain.AvailableDomains
+
+            if (-not ($Item.Enabled -eq $true)) {
+                Write-Host "Skipping Application, Application entry `"$($Item.Name)`" is not enabled" -ForegroundColor Yellow
+                continue
             }
 
-            foreach ($WEMAssignment in $Item.WEMAssignments) {
-                if ($WEMAssignment.Name -like "*\*") {
-                    $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
-                } else {
-                    $ADObjectName = $WEMAssignment.Name
-                }
-                $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $Domain, $ADObjectName
-                $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
-                if (-not $WEMAssignmentTarget) {
-                    # Find the group or user in Active Directory using the WEM cmdlets
-                    # The Where-Object ensures an exact match on the account name
-                    if ($WEMAssignment.Type -ieq "user") {
-                        $ADObject = Get-WEMADUser -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            Write-Host "Could not find user with name `"$($ADObjectName)`""
-                            Write-Warning "Known issue, we are looking at this issue"
-                            continue
-                        }
-                    } else {
-                        $ADObject = Get-WEMADGroup -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            <# There seems to be a bug with log group names#>
-                            $MaxLength = "$($ADObjectName)".Length
-                            if ($MaxLength -gt 23) {
-                                $MaxLength = 23
-                            }
-                            $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
-                            $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            Write-Host "Could not find group with name `"$($ADObjectName)`""
-                            continue
-                        }
-                    }
-                    # Create a new assignment target in WEM using the AD group's properties
-                    # The -PassThru parameter outputs the newly created object to the pipeline
-                    $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
-                    Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
-                } else {
-                    Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
-                }
-                # Assign the application to the target group
-                $WEMAssignmentParams = $Item.WEMAssignmentParams | ConvertTo-Hashtable
-                $WEMApplicationAssignment = New-WEMApplicationAssignment -Target $WEMAssignmentTarget -Application $WEMApplication -PassThru @WEMAssignmentParams
-                if ($WEMApplicationAssignment) {
-                    Write-Host "Successfully created WEM application assignment for $($WEMAssignment.Name)" -ForegroundColor Green
-                } else {
-                    Write-Error "Failed to create WEM application assignment for $($WEMAssignment.Name)"
-                }
+            if (-not $Forest -or -not $Domain) {
+                Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
+                return
             }
-            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force
-        } catch {
-            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
-            Write-Host "Error creating WEM application $($Item.Name), ErrorDetails`r`n $(Get-ExceptionDetails -ErrorRecord $_ -AsPlainText)" -ForegroundColor Red
-            continue
+            try {
+                Write-Verbose "Creating new WEM application $($Item.Name)"
+                try {
+                    $WEMApplication = New-WEMApplication @Params -SelfHealing $true -PassThru
+                    Write-Host "Successfully created the application `"$($Item.Name)`"" -ForegroundColor Green
+                } catch {
+                    Write-Host "Error creating WEM application $($Item.Name), Error $($_.Exception.Message)" -ForegroundColor Red
+                    Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
+                    Write-Host "Script Name: $($_.InvocationInfo.ScriptName)" -ForegroundColor Red
+                    $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+                    continue
+                }
+                # Check if Application was created
+                if (-not $WEMApplication) {
+                    Write-Error "Application $($Item.Name) not found in WEM"
+                    return
+                } else {
+                    Write-Host "WEM application $($WEMApplication.Name) with path $($WEMApplication.TargetPath) created successfully." -ForegroundColor Green
+                }
+
+                foreach ($WEMAssignment in $Item.WEMAssignments) {
+                    if ($WEMAssignment.Name -like "*\*") {
+                        $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
+                    } else {
+                        $ADObjectName = $WEMAssignment.Name
+                    }
+                    $AssignmentDomain = $null
+                    if ($WEMAssignment.DomainFQDN) {
+                        $AssignmentDomain = $AvailableDomains | Where-Object { $_.fqdn -eq $WEMAssignment.DomainFQDN } | Select-Object -ExpandProperty fqdn -ErrorAction SilentlyContinue
+                    }
+                    if ($WEMAssignment.DomainNETBIOS) {
+                        $AssignmentDomain = $AvailableDomains | Where-Object { $_.netBiosName -eq $WEMAssignment.DomainNETBIOS } | Select-Object -ExpandProperty fqdn -ErrorAction SilentlyContinue
+                    }
+                    if ([string]::IsNullOrEmpty($AssignmentDomain)) {
+                        $AssignmentDomain = $Domain
+                    }
+
+                    $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $AssignmentDomain, $ADObjectName
+                    $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
+                    if (-not $WEMAssignmentTarget) {
+                        # Find the group or user in Active Directory using the WEM cmdlets
+                        # The Where-Object ensures an exact match on the account name
+                        if ($WEMAssignment.Type -ieq "user") {
+                            $ADObject = Get-WEMADUser -Filter $ADObjectName -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                Write-Host "Could not find user with name `"$($ADObjectName)`"" -ForegroundColor Yellow
+                                Write-Warning "Known issue, we are looking at this issue"
+                                continue
+                            }
+                        } else {
+                            $ADObject = Get-WEMADGroup -Filter $ADObjectName -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                <# There seems to be a bug with long group names#>
+                                $MaxLength = "$($ADObjectName)".Length
+                                if ($MaxLength -gt 23) {
+                                    $MaxLength = 23
+                                }
+                                $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
+                                $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                Write-Host "Could not find group with name `"$($ADObjectName)`"" -ForegroundColor Yellow
+                                continue
+                            }
+                        }
+                        # Create a new assignment target in WEM using the AD group's properties
+                        # The -PassThru parameter outputs the newly created object to the pipeline
+                        $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
+                        Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
+                    } else {
+                        Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
+                    }
+                    # Assign the application to the target group
+                    $WEMAssignmentParams = $Item.WEMAssignmentParams | ConvertTo-Hashtable
+                    $WEMApplicationAssignment = New-WEMApplicationAssignment -Target $WEMAssignmentTarget -Application $WEMApplication -PassThru @WEMAssignmentParams
+                    if ($WEMApplicationAssignment) {
+                        Write-Host "Successfully created WEM application assignment for $($WEMAssignment.Name)" -ForegroundColor Green
+                    } else {
+                        Write-Error "Failed to create WEM application assignment for $($WEMAssignment.Name)"
+                    }
+                }
+                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force
+            } catch {
+                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+                Write-Host "Error creating WEM application $($Item.Name), ErrorDetails`r`n $(Get-ExceptionDetails -ErrorRecord $_ -AsPlainText)" -ForegroundColor Red
+                continue
+            }
         }
+    } else {
+        Write-Error "Failed to retrieve active WEM AD Domain. Please ensure you configure the active domain correctly using Set-WEMActiveDomain [-ForestName <ForestName> -DomainName <DomainName>]."
     }
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCD7mPgyeSOi5yEV
-# 5pi1FVt80JAySP2Kn4S5LZOd99IT1aCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBvca35bezcLn9D
+# kMvmCScMZDW2NEzXPopFjw0EFjnJvaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -322,31 +340,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDm013IgNp9lX9jJUcr3eCJsMeuC0mO9gKBeEe+8heD
-# jTANBgkqhkiG9w0BAQEFAASCAYAI1E0zvGf71aOmeRQKTIg1j5+8/HMpSdmW0oBQ
-# NhJqJ9rXGNVdD2x45SdnXwPmcRVAVbKrDd5FPpjiomoVt/+/vf9FssAqW1JIC1LW
-# E0cL7iwy3auM9p5JKveDPM4O9aw9S39ziQ1RLplhDsCSi+eeZ4+ar+vU101NqrUg
-# KAOwXf7lNNJ1tt43JBE2lyjphBIbHw1iwzXyI42/JwAkMdz8i38EfnBOsC0iZiGK
-# /5rxmEhhCwjqRAoFOCrFUKXE9VJ06w6zlI+MeNS7O8J9qhmxumqE9PUjsasKyTUj
-# vBSbmOTtTbRJWMx9dWWApkH/OivXWa7zhFhAtzVukwiKvUfLfuMynMFZ96mOBsuU
-# oZ4pBygSUHG0y95HO72/4qHflyydefBmlRyb1MQbdVC/Mbe9nZ9XVFH3hcRHw9+d
-# 2q2CEwnTRySMrD/kfQVHCN0YyiB7CQSSdaMiI3Ym2Xbnmhza65GIXsGzDxC4Ssx+
-# Vc4M31UXwk9XmstWWSV7o3xTqBmhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCDxNd7cbpXtkNBe0uT1lDn5k+VhspB4jsF9rr1TVGL2
+# ljANBgkqhkiG9w0BAQEFAASCAYAOV9TB9oAEaZlNXfXnXgoKRpwVSeXzT0DGYBDu
+# +N/GwY5qjIscUjwVsG9rxMVM5yEVulRPVNVhaSlH5+9nG3P8yaqmGqTG3ldmT3IJ
+# AjdgLkFKe4RgXNJg6zgjmExxgA+Vp10AdvKzPy+V9kFGFGe/QhNJAT/EbFhacCfG
+# /+S3RqKMZDPxH/dRxZn4vDjoyDJcH/TtAVn+FLjMpiI5uayWciJ6hb5BVbbSkGgT
+# xUwfKw2nlFGwsJ+Wd3jpICcIp426NEYu5n+cetL36EcI2FIYLb2ZQknEbY/Lq4KB
+# HsTJLv89LWtALFzU/nEcQ/66e5vHEvklQlekOtDtFVJWqzaWMvB0sFOkthOe+mqp
+# jKfZAmBCwdun54BsYzvvPzOogryIarGnhpWgUbSQv7su1AzwCgpC2ZLSg0lpEsON
+# STwt7y1uQxEk9CbjhMCqC0S6dnV4PjnkEGFTuvqZOVJ3QiYRHr97D0c/TuwQqvoL
+# cjc/ZxRPfKTqZXMNDOqufRSuUnyhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjUxNjE4NTVaMD8GCSqGSIb3
-# DQEJBDEyBDChok5fEVR7odIjEncVau5TSgXf2Vl1hSH09gslsi1A8ytkYbGA97WM
-# ZOq1f3qHkFkwDQYJKoZIhvcNAQEBBQAEggIArXsd2Dvs25cszZYedU4hjwEspOj7
-# 6dtGhtQznYDP+rgnjgLcHgoYgUN9OgnpTOsLqu/UgIF3Lzcfb+E9zSGO6NiXn0K2
-# gjxIlRQLjmU1M2VH05K7UxBPReqSwutC/68H8n45U0dAlktsNc5Fc/7Ba14/OGkk
-# j5wgrRVLyRp8zfz98NTFgkzgYJUXAICu7q4pPkfFV4MIsC3LgmjsaSGo41E+0MHW
-# jgGby+K93YHiU5YSBSvo7pCz6WQwm0SkvVlgrqVi+S89y3IEgd9b7nVdsSxSCNuP
-# 3RSAye2ZjU0sQ8S46sUTYZaROqtasstZ0N4vvTJPxDkiuacLyxxWhWcXNhwVfb3w
-# o/dgpfDpwQL08QGvOGP6QNGIIHTu+5iB/E0Ls8+hTijURXZe5mA4aCO7a/VXpkJj
-# D9LIsQZ4h3qUmJeimk/aFmUDcUDiZhywX3dkYQnM21tj/7Qf7A1JePBDLxS9Y71R
-# D7EYHFgH7rLbfInYVrN5/DIbNiv+rwr2d4DFr953Xc+Fj649WFGB1vezE2Yd39ax
-# 62+UBrA1dOVeU3Y1AsPUuyFB1t9hCXI8IHQc6ilWOv7pbh81P7fxlwqNVawNpX7p
-# og4M3IuoqzXXhAFSN9QVLiso2kY+xFIk4JhlHqOZ5WniMJAGmlGM/FlPgqhcccIm
-# ykAE1O7xP6pThiY=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMDMyMTI2MzVaMD8GCSqGSIb3
+# DQEJBDEyBDBOB1QajhIP6Aumawlz1o9xCbyDaZAFE3wlsc/7bZ88qqpul8WIbpHS
+# opCfDpHHpdQwDQYJKoZIhvcNAQEBBQAEggIAwilkLA/yVcTXUMnRoqGbbcimXTsR
+# F4DzEFo4Wep9qnq7SLiD7OuxLfFQaO17y9EMWUkj6nd9q/PhW08edFWEdZJp3NeE
+# UHO5iIDK4YyDzBBuAgah1oze7Sgmd0ezFqfYKnClWPkYq3ylJ0NOBCbR3s7cGOSy
+# azPI03Skt91N51vAUXVi2pMNBMzbq5McLh2Ya22T+eH9zeugf+VNITrdt00eqePF
+# qFMIZMupk6AWlFKTr8RlLopHpU0L5fQmAmLI8PoSs9rvOvcy78PcU9X+SmPigSGu
+# fQnH/Ozht2B/O2AEm7mZwj1J0LbfXiGTInYCCfz/303nAkVK3+Pyl+KgrfT+LlY5
+# mWeZTeCpXYPudsw2JRLRiCcKah+YkMCz08Airjz9ogxS7gpOprYu3NSmHngyK0La
+# oU7qZHcj06o8QLUbI+UmKquATnW1XXOTrggSKEmIkWOJIzUeJ7LxYBfNxd5rrrLa
+# ooU/OKLJ0p+NpAAKE0qbQDbKLp58VBKB1RFBtGMFkS3M8YKTsu7iYBfBfG742i/v
+# CUCCmeyJqKoaIWnRR+6xeZv6rlgjeCGkRQjiAuwfbrydH2oYZGkLnpxHIa1+4Qkb
+# ayLuFy1VqaATKvhlfmNuysHq0+v5ZCjX82YgB7gnyOUqAr+tTOyIJIDVHYRSuHXe
+# 64wgWQdp68maGtM=
 # SIG # End signature block

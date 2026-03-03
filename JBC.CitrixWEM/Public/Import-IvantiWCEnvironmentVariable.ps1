@@ -23,130 +23,149 @@
     if ($script:WemApiConnection.IsConnected -ne $true) {
         throw "Not connected to WEM API. Please run Connect-WEMApi first."
     }
-    $Params = @{
-        XmlFilePath = $XmlFilePath
-        ExportFor   = "WEM"
-    }
-    if ($PSBoundParameters.ContainsKey('DomainFqdn')) {
-        $Params.DomainFqdn = $DomainFqdn
-    }
-    if (Get-WEMConfigurationSite | Where-Object { $_.id -eq $ConfigurationSiteID }) {
-        Set-WEMActiveConfigurationSite -Id $ConfigurationSiteID
-    } else {
-        throw "Configuration Site with ID $ConfigurationSiteID could not be found."
-    }
-    $itemsToProcess = @(Get-IvantiWCEnvironmentVariable @Params)
-    if ($GUI.IsPresent -eq $true) {
-        $itemsToProcess = @(
-            $itemsToProcess | Select-ObjectFromGrid -Title "Select Environment Variables to import from Ivanti IWC" `
-                -ColumnsToShow @('Name', 'Enabled', 'Description')
-        )
-    }
-    if (-not $itemsToProcess -or $itemsToProcess.Count -eq 0) {
-        Write-Warning "No environment variables found to import."
-        return
-    }
-    Write-Host "We got $($itemsToProcess.count) environment variables"
-    foreach ( $Item in $itemsToProcess ) {
-        if ($Item.Success -and $Item.Success -eq $true) {
-            continue
-        }
-        $Params = $Item.WEMEnvironmentVariableParams | ConvertTo-Hashtable
-        $Forest = (Get-WEMActiveDomain).Forest
-        $Domain = (Get-WEMActiveDomain).Domain
-        if (-not ($Item.Enabled -eq $true)) {
-            Write-Host "Skipping Environment Variable, Environment Variable entry `"$($Item.Name)`" is not enabled" -ForegroundColor Yellow
-            continue
-        }
+    if ($ActiveDomain = Get-WEMActiveDomain) {
 
-        if (-not $Forest -or -not $Domain) {
-            Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
+        $Params = @{
+            XmlFilePath = $XmlFilePath
+            ExportFor   = "WEM"
+        }
+        if ($PSBoundParameters.ContainsKey('DomainFqdn')) {
+            $Params.DomainFqdn = $DomainFqdn
+        }
+        if (Get-WEMConfigurationSite | Where-Object { $_.id -eq $ConfigurationSiteID }) {
+            Set-WEMActiveConfigurationSite -Id $ConfigurationSiteID
+        } else {
+            throw "Configuration Site with ID $ConfigurationSiteID could not be found."
+        }
+        $itemsToProcess = @(Get-IvantiWCEnvironmentVariable @Params)
+        if ($GUI.IsPresent -eq $true) {
+            $itemsToProcess = @(
+                $itemsToProcess | Select-ObjectFromGrid -Title "Select Environment Variables to import from Ivanti IWC" `
+                    -ColumnsToShow @('Name', 'Enabled', 'Description')
+            )
+        }
+        if (-not $itemsToProcess -or $itemsToProcess.Count -eq 0) {
+            Write-Warning "No environment variables found to import."
             return
         }
-        try {
-            Write-Verbose "Creating new WEM environment variable $($Item.Name)"
-            try {
-                $WEMEnvironmentVariable = New-WEMEnvironmentVariable @Params -PassThru
-                Write-Host "Successfully created the environment variable `"$($Item.Name)`"" -ForegroundColor Green
-            } catch {
-                Write-Host "Error creating WEM environment variable $($Item.Name), Error $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
-                Write-Host "Script Name: $($_.InvocationInfo.ScriptName)" -ForegroundColor Red
-                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+        Write-Host "We got $($itemsToProcess.count) environment variables"
+        foreach ( $Item in $itemsToProcess ) {
+            if ($Item.Success -and $Item.Success -eq $true) {
                 continue
             }
-            # Check if Environment Variable was created
-            if (-not $WEMEnvironmentVariable) {
-                Write-Error "Environment Variable $($Item.Name) not found in WEM"
-                return
-            } else {
-                Write-Host "WEM environment variable $($WEMEnvironmentVariable.Name) with value $($WEMEnvironmentVariable.VariableValue) created successfully." -ForegroundColor Green
+            $Params = $Item.WEMEnvironmentVariableParams | ConvertTo-Hashtable
+
+            $Forest = $ActiveDomain.Forest
+            $Domain = $ActiveDomain.Domain
+            $AvailableDomains = $ActiveDomain.AvailableDomains
+
+            if (-not ($Item.Enabled -eq $true)) {
+                Write-Host "Skipping Environment Variable, Environment Variable entry `"$($Item.Name)`" is not enabled" -ForegroundColor Yellow
+                continue
             }
 
-            foreach ($WEMAssignment in $Item.WEMAssignments) {
-                if ($WEMAssignment.Name -like "*\*") {
-                    $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
-                } else {
-                    $ADObjectName = $WEMAssignment.Name
-                }
-                $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $Domain, $ADObjectName
-                $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
-                if (-not $WEMAssignmentTarget) {
-                    # Find the group or user in Active Directory using the WEM cmdlets
-                    # The Where-Object ensures an exact match on the account name
-                    if ($WEMAssignment.Type -ieq "user") {
-                        $ADObject = Get-WEMADUser -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            Write-Host "Could not find user with name `"$($ADObjectName)`""
-                            Write-Warning "Known issue, we are looking at this issue"
-                            continue
-                        }
-                    } else {
-                        $ADObject = Get-WEMADGroup -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            <# There seems to be a bug with long group names#>
-                            $MaxLength = "$($ADObjectName)".Length
-                            if ($MaxLength -gt 23) {
-                                $MaxLength = 23
-                            }
-                            $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
-                            $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            Write-Host "Could not find group with name `"$($ADObjectName)`""
-                            continue
-                        }
-                    }
-                    # Create a new assignment target in WEM using the AD group's properties
-                    # The -PassThru parameter outputs the newly created object to the pipeline
-                    $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
-                    Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
-                } else {
-                    Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
-                }
-                # Assign the environment variable to the target group
-                $WEMAssignmentParams = $Item.WEMAssignmentParams | ConvertTo-Hashtable
-                $WEMEnvironmentVariableAssignment = New-WEMEnvironmentVariableAssignment -Target $WEMAssignmentTarget -EnvironmentVariable $WEMEnvironmentVariable -PassThru @WEMAssignmentParams
-                if ($WEMEnvironmentVariableAssignment) {
-                    Write-Host "Successfully created WEM environment variable assignment for $($WEMAssignment.Name)" -ForegroundColor Green
-                } else {
-                    Write-Error "Failed to create WEM environment variable assignment for $($WEMAssignment.Name)"
-                }
+            if (-not $Forest -or -not $Domain) {
+                Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
+                return
             }
-            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force
-        } catch {
-            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
-            Write-Host "Error creating WEM environment variable $($Item.Name), ErrorDetails`r`n $(Get-ExceptionDetails -ErrorRecord $_ -AsPlainText)" -ForegroundColor Red
-            continue
+            try {
+                Write-Verbose "Creating new WEM environment variable $($Item.Name)"
+                try {
+                    $WEMEnvironmentVariable = New-WEMEnvironmentVariable @Params -PassThru
+                    Write-Host "Successfully created the environment variable `"$($Item.Name)`"" -ForegroundColor Green
+                } catch {
+                    Write-Host "Error creating WEM environment variable $($Item.Name), Error $($_.Exception.Message)" -ForegroundColor Red
+                    Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
+                    Write-Host "Script Name: $($_.InvocationInfo.ScriptName)" -ForegroundColor Red
+                    $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+                    continue
+                }
+                # Check if Environment Variable was created
+                if (-not $WEMEnvironmentVariable) {
+                    Write-Error "Environment Variable $($Item.Name) not found in WEM"
+                    return
+                } else {
+                    Write-Host "WEM environment variable $($WEMEnvironmentVariable.Name) with value $($WEMEnvironmentVariable.VariableValue) created successfully." -ForegroundColor Green
+                }
+
+                foreach ($WEMAssignment in $Item.WEMAssignments) {
+                    if ($WEMAssignment.Name -like "*\*") {
+                        $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
+                    } else {
+                        $ADObjectName = $WEMAssignment.Name
+                    }
+                    $AssignmentDomain = $null
+                    if ($WEMAssignment.DomainFQDN) {
+                        $AssignmentDomain = $AvailableDomains | Where-Object { $_.fqdn -eq $WEMAssignment.DomainFQDN } | Select-Object -ExpandProperty fqdn -ErrorAction SilentlyContinue
+                    }
+                    if ($WEMAssignment.DomainNETBIOS) {
+                        $AssignmentDomain = $AvailableDomains | Where-Object { $_.netBiosName -eq $WEMAssignment.DomainNETBIOS } | Select-Object -ExpandProperty fqdn -ErrorAction SilentlyContinue
+                    }
+                    if ([string]::IsNullOrEmpty($AssignmentDomain)) {
+                        $AssignmentDomain = $Domain
+                    }
+
+                    $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $AssignmentDomain, $ADObjectName
+                    $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
+                    if (-not $WEMAssignmentTarget) {
+                        # Find the group or user in Active Directory using the WEM cmdlets
+                        # The Where-Object ensures an exact match on the account name
+                        if ($WEMAssignment.Type -ieq "user") {
+                            $ADObject = Get-WEMADUser -Filter $ADObjectName -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                Write-Host "Could not find user with name `"$($ADObjectName)`""
+                                Write-Warning "Known issue, we are looking at this issue"
+                                continue
+                            }
+                        } else {
+                            $ADObject = Get-WEMADGroup -Filter $ADObjectName -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                <# There seems to be a bug with long group names#>
+                                $MaxLength = "$($ADObjectName)".Length
+                                if ($MaxLength -gt 23) {
+                                    $MaxLength = 23
+                                }
+                                $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
+                                $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                Write-Host "Could not find group with name `"$($ADObjectName)`""
+                                continue
+                            }
+                        }
+                        # Create a new assignment target in WEM using the AD group's properties
+                        # The -PassThru parameter outputs the newly created object to the pipeline
+                        $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
+                        Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
+                    } else {
+                        Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
+                    }
+                    # Assign the environment variable to the target group
+                    $WEMAssignmentParams = $Item.WEMAssignmentParams | ConvertTo-Hashtable
+                    $WEMEnvironmentVariableAssignment = New-WEMEnvironmentVariableAssignment -Target $WEMAssignmentTarget -EnvironmentVariable $WEMEnvironmentVariable -PassThru @WEMAssignmentParams
+                    if ($WEMEnvironmentVariableAssignment) {
+                        Write-Host "Successfully created WEM environment variable assignment for $($WEMAssignment.Name)" -ForegroundColor Green
+                    } else {
+                        Write-Error "Failed to create WEM environment variable assignment for $($WEMAssignment.Name)"
+                    }
+                }
+                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force
+            } catch {
+                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+                Write-Host "Error creating WEM environment variable $($Item.Name), ErrorDetails`r`n $(Get-ExceptionDetails -ErrorRecord $_ -AsPlainText)" -ForegroundColor Red
+                continue
+            }
         }
+    } else {
+        Write-Error "Failed to retrieve active WEM AD Domain. Please ensure you configure the active domain correctly using Set-WEMActiveDomain [-ForestName <ForestName> -DomainName <DomainName>]."
     }
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDk03bVMlgnS+f+
-# c6ik+wJFtLC1UfIklQOhIFmDieUcEqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAEOs5aUkllN5iu
+# G6FBxmEAHUHzQGucR+HFADOFTcP0yqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -322,31 +341,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDeHt5o1wgMKJYTutNmoOqbqaIbbW/jhPa1MUot6Hfc
-# dzANBgkqhkiG9w0BAQEFAASCAYALPJiYdcE9a+/wjXnpQed4a/IzmF7Pet49R9us
-# /zAHtgXl9GCt0zUll5kjlZMOBUKlI9Ej5Pp6uwR8OvIDlCtYGuyx9Eiv9IR6lhQw
-# L8qRBsTfHm/SFIQOeIcRceS/QITTSoiZU5Y6/0h3fC2kLIA3IKobG3flS8HQRzCD
-# /EcuvXbJbBYbr68hkdPpe4qUm7KndZKnyafTt660gYi5ahPdaZ0D52GQ7MIWiYib
-# 83IbbaGi9uoNiyezUe4rZIEiTh1X5CqsieGriGuSihiZsL7XzhPruLgTXANmusus
-# KbRi84hxfuUEBaWvQVr3fYUGdv2VAg4yYZNzxiQABo3mN5e8ujZbea+SY38T2N1a
-# gxEBYPpys0R4iBHdaGQM68WR+yK6kky/Qb6wp3LORWOmGd3LOjVyCUSp2nj8OZ8m
-# a8Z0YFInEwubbdGFDOIF+Dvuq50bjE9NZ7M6E2XM2/M53xvJUfgaokuo9UpoUe2J
-# emf4zH0Km3kgZogjKqi56NsIWJOhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBDuIFhabLXjGR3vY60Ar7W203VLw/MuBF+uOSl+TbI
+# wTANBgkqhkiG9w0BAQEFAASCAYBlXRf4vPITtUD1bY8LE5KeLSYk0WD+H7sD6ips
+# HBRJ9ee9eUlWsBLU7OuC1HDnt7+MyxIxadHgIooYGSrarGchMwVCvTDe58vgoAJ+
+# 3vKAaaGgkJ/jNjZe7auPzE9mf/BQquJqGIiV7BPzBnVDEnkrTI/6BHu+l/1tuMCO
+# 9AizZfuGFyo2WV3m6Y+v0+qOLKrdAYRWjkLo+THa7q0H4BpdAd0KYS6eVnHnGrRT
+# xTgmaRoboid1RGxjOEcRDvuj92Y/3U4XKdRiSIazmleqh5IGTB9uKFxWdzFN5FQt
+# UwbY3uwC9dISuPFuouFEWM8vtMPwgv4MgaokoPEGqCNYOxgI2+RNcEF/GN2tB+DS
+# gUVM6XRRud0zzAYxY/ZYB6XmpSzQ1t55iOZMtHQUlxiuN/rRIOkpRfoTcrt//P/i
+# yyJaCX2bPbZt9/AYfyXRm877HybbIAd6wIAcewOmrBvtabmdhSGqwB52P4bnSVrZ
+# qhrFwP+EJao+zaC2EWO3XWiYYxKhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjQwODMwMTZaMD8GCSqGSIb3
-# DQEJBDEyBDDUFrtsCwjFYlxa/LCb4bID4Ivehs08VF+HhXRJGxwdOWHaJ4bhQyut
-# p8YirByf5PQwDQYJKoZIhvcNAQEBBQAEggIAh7kyyCkCOVowGcO+yVmWLHIiCIXw
-# nMrDpYENJ4N91LXW5rqVyOBiR33NZu6mv0m0kuu9aoOH6NEC7Ct5rUNTVpQz4KGa
-# J1NKm+752vi6toyurnLaOgDcnAOrcIznJoIk1izCZkXb4dFeKS/ovizqL7dxPmeg
-# sQ+Nq85SM6ot/dtuVY4TSzXsvcMV+ia89fABQdTPxW89cRbfkLbwsMNBI7/JY6WQ
-# qUxTGjQ1rFfLDrJv5CMfgJVF8skMu87IZFvnYthof0mljRoYJ7QBZ4d8TaV0D9Me
-# CB6/IM1NJ/UVBzy9xEd6mlZzE7ZXfI4PGOGMgQh/Ah9KmN/jXOUhV/PSh5sQkuh2
-# 7U0vEQwevIwbgUau27KJa+4o79mwqj0M8oOjIXkPKYEbVgb8/FL4EmeJNv9NkwsH
-# +Oj9NO00lE6zhMfruKdqcXzzHFsgJjiHYKlnJw3falh8tht3LLFDTj5O3CjA0QcX
-# jy4p0MJGIzZ1SQczycGpYqRvNRXDrpva0Y0wpcRf8pFNXkvzzkKdlZ9eGFxSyAAV
-# rA0CD28tHzEORJBmo/5mnwXb/9e21iZ2oaIDRi7fVUSIWaJz9nRxL1cubpM0wMjV
-# 01Cq/nFLtREFcUKg45nrMGncDaejZc+CddXFDjl2s3n1st/AIduJ8fb8XCOwp213
-# Jt/+fvQQm4PxcTM=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMDMyMTI2MzhaMD8GCSqGSIb3
+# DQEJBDEyBDAezq2LkHjYn1mKDlNFQrPYH+0PJv5iU/E491bhmsLrXLcSRw0+nhhH
+# i/3AjHyrWo8wDQYJKoZIhvcNAQEBBQAEggIAuEA+lPGFtDznINoox2NSjJUY/O50
+# RNgOAMhlPUIwK1oq4V5z36lG/zelPGTP13hjRgmnWSWWF0BfQyW1AjgWqNAZIAiC
+# EQwfMlt7VFUPqaNEPxd/5HuNyYddByonjJ28PyEGjEatTxLWbUPorAewL/Xzq8Wd
+# nu+qMfAa/oqClAerc+yMy2ITCMfhJMzXhKZ/1yxHigSe9ndpZwr1UohqvQV5R1ym
+# DZjTlnWXsa0az2JwFl7TRE6PULlLvDZD8pvKaJipv2gmU5JKyDAUZTel5dhv+DXx
+# GyJQ48KKy3QYt4s32WbyNvQi6420wGYtx/WhVWRPDZLnUE8hhnclp53lf+1b4FHf
+# x3N3fsxCUEOnjviS1vg12q68iGye3Dlqo8ROik58Ih7JYs9rv2yADD1JKePdMlVE
+# 2kVuMe+SGvkr0AkoHnv7l0VfCjFLWZshXXcRHpRnScn3w9KJ2mp2HS4ZcrnUo+yl
+# 2hck92QweswlZUvEI/XNiqD3kxe7L7GF2Q9O7Cm49YR6PK5+Wd3tnAaoerwBXpWj
+# H6fU5h8rZRKoOVdfy3lhRYcbHvSUsRyBvvB4yldj1AwGjzQpw/Q6oDOrA5DpgIEj
+# 1HbOqFSHUCd9oq/deGLymKBj8SMZtop9rIrpqssIGhoeIOX126nGlIwYVW7EMo7E
+# +RC9rXOkCBWkjyE=
 # SIG # End signature block

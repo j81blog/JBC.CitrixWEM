@@ -1,4 +1,4 @@
-function Set-WEMActiveDomain {
+﻿function Set-WEMActiveDomain {
     <#
     .SYNOPSIS
         Sets the active WEM AD Forest and Domain for the current session.
@@ -34,56 +34,74 @@ function Set-WEMActiveDomain {
     try {
         $Connection = Get-WemApiConnection
         $FoundDomains = @()
+        $SelectedForest = $null
+        $SelectedDomain = $null
+
 
         # Determine which scenario to use based on provided parameters
         if ($PSBoundParameters.ContainsKey('ForestName') -and $PSBoundParameters.ContainsKey('DomainName')) {
             # Scenario 1: Both are specified (most specific)
             Write-Verbose "Validating specific pair: Forest '$($ForestName)', Domain '$($DomainName)'..."
+
             if (Get-WEMADForest | Where-Object { $_.forestName -eq $ForestName }) {
-                $FoundDomains = @(Get-WEMADDomain -ForestName $ForestName | Where-Object { $_.domainName -ieq $DomainName })
+                $FoundDomains = @(Get-WEMADDomain -ForestName $ForestName)
+                $SelectedDomain = @($FoundDomains | Where-Object { $_.domainName -ieq $DomainName })
             }
         } elseif ($PSBoundParameters.ContainsKey('DomainName')) {
             # Scenario 2: Only DomainName is specified
             Write-Verbose "Searching for unique domain '$($DomainName)' across all forests..."
-            $FoundDomains = @( Get-WEMADForest | ForEach-Object {
-                    Get-WEMADDomain -ForestName $_.forestName | Where-Object { $_.domainName -ieq $DomainName }
-                })
+            $FoundDomains = @(Get-WEMADForest | ForEach-Object {
+                Get-WEMADDomain -ForestName $_.forestName } )
+            $SelectedDomain = @($FoundDomains | Where-Object { $_.domainName -ieq $DomainName })
         } elseif ($PSBoundParameters.ContainsKey('ForestName')) {
             # Scenario 3: Only ForestName is specified
             Write-Verbose "Searching for unique domain within forest '$($ForestName)'..."
-            $DomainsInForest = Get-WEMADDomain -ForestName $ForestName
-            if ($DomainsInForest.Count -eq 1) {
-                $FoundDomains = $DomainsInForest
+            $FoundDomains = Get-WEMADDomain -ForestName $ForestName
+            if ($FoundDomains.Count -eq 1) {
+                $SelectedDomain = @($FoundDomains)
             } else {
-                throw "Forest '$($ForestName)' contains multiple domains. Please specify the one you want to use with the -DomainName parameter."
+                Write-Warning "A default domain could not be determined because the forest '$($AllForests.forestName)' contains multiple domains."
+                Write-Warning "Set the default domain: Set-WEMActiveDomain -ForestName $($AllForests.forestName) -DomainName <DomainFQDN>, domains available:"
+                $FoundDomains | ForEach-Object { Write-Host "=> Domain: $($_.fqdn) [$($_.netBiosName)]" -ForegroundColor Yellow }
+                return
             }
         } else {
             # Scenario 4: No parameters specified (least specific)
             Write-Verbose "Attempting to auto-detect a single forest and domain..."
             $AllForests = @(Get-WEMADForest)
-            if ($AllForests.Count -ne 1) {
-                throw "Multiple forests found. Please be more specific by providing the -ForestName parameter."
+            if ($AllForests.Count -gt 1) {
+                Write-Warning "Multiple forests found. Please be more specific by providing the -ForestName parameter."
+                $AllForests | ForEach-Object { Write-Host "* Forest: $($_.forestName)" -ForegroundColor Yellow }
+                return
+            } elseif ($AllForests.Count -eq 0) {
+                throw "No forests found. Please ensure your WEM environment is correctly configured."
             }
-            $DomainsInSoleForest = @(Get-WEMADDomain -ForestName $AllForests.forestName)
-            if ($DomainsInSoleForest.Count -ne 1) {
-                throw "The forest '$($AllForests.forestName)' contains multiple domains. Please specify the one you want to use with the -DomainName parameter."
+            $FoundDomains = @(Get-WEMADDomain -ForestName $AllForests.forestName)
+            if ($FoundDomains.Count -gt 1) {
+                Write-Warning "A default domain could not be determined because the forest '$($AllForests.forestName)' contains multiple domains."
+                Write-Warning "Set the default domain: Set-WEMActiveDomain -ForestName $($AllForests.forestName) -DomainName <DomainFQDN>, domains available:"
+                $FoundDomains | ForEach-Object { Write-Host "=> Domain: $($_.fqdn) [$($_.netBiosName)]" -ForegroundColor Yellow }
+                return
+            } elseif ($FoundDomains.Count -eq 0) {
+                throw "No domains found in the forest '$($AllForests.forestName)'. Please ensure your WEM environment is correctly configured."
             }
-            $FoundDomains = $DomainsInSoleForest
+            $SelectedDomain = @($FoundDomains)
         }
 
         # --- Process the results ---
-        if ($FoundDomains.Count -eq 0) {
+        if ($SelectedDomain.Count -eq 0) {
             throw "No matching domain could be found with the specified criteria."
-        } elseif ($FoundDomains.Count -gt 1) {
+        } elseif ($SelectedDomain.Count -gt 1) {
             throw "Multiple domains named '$($DomainName)' were found. Please be more specific by providing the -ForestName parameter."
         }
 
-        $TargetDomain = $FoundDomains[0]
+        $TargetDomain = $SelectedDomain[0]
         $TargetDescription = "Forest: '$($TargetDomain.forestName)', Domain: '$($TargetDomain.domainName)'"
 
         if ($PSCmdlet.ShouldProcess($TargetDescription, "Set as Active WEM AD Domain")) {
             $script:WemApiConnection | Add-Member -MemberType NoteProperty -Name "ActiveForestName" -Value $TargetDomain.forestName -Force
             $script:WemApiConnection | Add-Member -MemberType NoteProperty -Name "ActiveDomainName" -Value $TargetDomain.domainName -Force
+            $script:WemApiConnection | Add-Member -MemberType NoteProperty -Name "AvailableDomains" -Value @($FoundDomains) -Force
 
             Write-Verbose "Active WEM AD context set to:"
             Write-Verbose "  Forest: $($script:WemApiConnection.ActiveForestName)"
@@ -97,8 +115,8 @@ function Set-WEMActiveDomain {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDmixHTAbftVeex
-# lWE4X2BUIMUBH9kP7s6ALxsk2UPipqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDW8l0bC4Za/oiG
+# VNu67G8TwyHTh8Pq6/FACt9Z4/Bip6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -274,31 +292,31 @@ function Set-WEMActiveDomain {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDZinUYPsthib6kFLbk4csYUqSTrWWnWqz7GGXoDJrB
-# wTANBgkqhkiG9w0BAQEFAASCAYBGhuEVWM//9ABFyU//DESnwTQ6MhqeGeq/Mpgp
-# Csi8B5TnBR18m86rZOgWEFejH8EOhjl4KZo65LFDCwnyvEk27OsRqpFgFpgHwIbn
-# ag1gkAH+YjAO6emTEH52UaCM/DbZjxkjNpdfltqhWscTUwzAS9Ie15JyUCPXXyRQ
-# FhREQFqufsqcsAwrae/zE20/bLk2riTMXClN2Be0hfuze52qpuGI4A3GqImluvCU
-# /ypJ02BgZcDuDkDXygIYNzCO9K/+PHIT9ZCXaBTwj4FdMWrCVKf+VLT3CiH4Qi+g
-# Eq+Y82WH09XAuKlP8HBu0+O4f9QWOTMSpKCyb44tJVCFjpiF0Ch1SOd++EnTYxfb
-# aedbcW0xY324ljlQ65DWcXbuuvKHqbLptZFUdXxJw3vvDNDu6quo0wWjippQ39So
-# vBkr6NpdANc3OQxpj9V8S5fKwRsvLEFOUnsJ3P02Gwuemx/Wol2Spf1ICGXlkeCV
-# x8yXokym3o5sTGJGHtN1rIEwLmmhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCB2WCn69Q+ARJK1uHHHb8qGpNABP/4uf0yziByc82d0
+# 6DANBgkqhkiG9w0BAQEFAASCAYAL4d5pU5icfHrwF8OLCEVBYu8JAijWPMZxeoLm
+# t0fkgf3S4DQ54LQ2PY6wkXuZ152GErIEhFavoeUbNCESYGI9PXi1rEYFRcMGX9+P
+# 1L8bMeQCeftjhWiCA7iHAGS0stGu1DtGfYYIjpx3+jkaQrWaZZttQgBKMC8QCt8+
+# MFA92dt3zWHKZq5VuMjucdjfpuT2rb3Kn3nn35QUz71VN5Iv1nY7SQC50lJZoJ8w
+# 3ZUSdOt6ugTxqbI8VZHEgxUaEVQLK0K7a9xBHk+qI85ZRQX3hXAVznFTaq6/GrVO
+# YKr1Bq1q4MdPZs0+pdg0gewcygwZksgmyDVhWwHOqCPD0t5VIv1SOVm5oRSU++uI
+# rGAwpe+hGmpBIzlqRS4xLjuAR01vECkF5vAy8bFxM0IUFUnH3kHn6yYMJdgAHbMC
+# d+Z/T4aPcRjgdvx77rtzVD7kf96gyCqAPPFlUp93kZmLSo3vti3zz8vOtpMYJ0+K
+# dxvxHnJ4YyCkf82T+54fyuBay4ShggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU5MjVaMD8GCSqGSIb3
-# DQEJBDEyBDC+65t7sKxp2yVIdiqfXEqcdHCuqhyLveBq6z5XGureXECXF3yEeFQ0
-# Ihu66rukTB8wDQYJKoZIhvcNAQEBBQAEggIA04FvQL+jrFWZk3gsNAo/myIQ8aJy
-# /s6tNE6I64UxKSUZEVE3ODbVk1/3pe7F4+BDHTCfgiTPEo77BQQhSS0M0UZqq1s2
-# Js8UiiZ75ptsscB9vNR6OkTNcrgvmLWGfgEpdgEE9FaAuEL372UupEG3OFzOfuXN
-# eF7GttbEuVedsQ6qw4A/ExqujZOExhvJkSBqLO2h+VK+utj//YutoUFb3yAMf1lb
-# hb5dIIYvrWkzSSG5jGri5NX8SYmLGHhwfkhi7jVZLkG5/Nu7EOqM5IghW+CKwJwr
-# EKQtQG1GNV8qHftF1B+Rl2K9V0iaapPrsw8fy8UZbwjhViaUEBQmRZ6k5O+uLrqk
-# bzInpfYEf23DsYFXpK6EJRKlwXD1E3sELAcvRXinLKubo2GTg5VOq/qI+NAK8nOW
-# S7YSpq2dKQ/4ZXTr5dMonEl6AV9Oqb8Ivk1rmWYneRHzG7PkVUd+TArsej8ytuDe
-# 8zBdKVly8Gturmk57ixsicrc2mqRq3yFDl1sQRia7MY0MEMzk4AzwFI6oOeToVub
-# s5jItwfv0CgwCtSjx4nwUi3h975TKgxr8tF7Te9zdKQrkShquwarjoOz+zU4CIe2
-# 5vJLN3gMvHzRNEO5EGkeg11r7OD85fT02fHTRzd1yUHZ3hlV4jGyKPqH5OXeGyG5
-# SG0DvQ34gYyq1Ms=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMDMyMTI2NDlaMD8GCSqGSIb3
+# DQEJBDEyBDD6YQHTgbCjDAbOb9w8bNZcvVlXafyx3qByTOblApd1bXIwtya/Yjm0
+# 1t/gRdqOS3AwDQYJKoZIhvcNAQEBBQAEggIAgEpMMiH44EoygCAjfNqKXv85GjwE
+# xa/mRi5vFLXTR+BPHZiosPrqG+N6R3jB5hS4pE1IFT65mZ30abwteTxjK3xKtODN
+# J402LhTVOOHh+OR5jjmTXzA3z1WAjsrQtX/eEoCYsZM8ljWuDuPXO21exB/PRqjU
+# LG3h1UpEvycws+wPY5aCpMDEhTOZW263IRipJgqJYin6ubyTsOeRztwoaAc/NJYA
+# MBqgNYpfBlRaZfvo23L4Oe2jSgcBS5Ebh819+Q6cAlxsfwTY2PiFamUXMfzdTeI9
+# XahZhP9tStVjzWGcGN9RaGsFhEXkdUT8Epinc8sikGXebQ5etVegAkYv5ePFR/EP
+# IVHrKQ0Zi2F1SKYL/LCTkUZ506rdDX9CxCCZ9LOv/dIP3BOsiV4sM0ExSzMN8q7S
+# Wvr0XLcyiUhzs/943FwJi9h2scg7IsD6Pg9eWHAedIsWDgZ3GZIgXqObgKBtbfv3
+# FIR4ZH5NznF1+Yjd4zKJM1Qk96zCqucZwYZkqpRRgaYJ7LF/5GpU96pyauemLvE+
+# FlfR+VWu25zxxDGnObE1Eqh7+8OGmNm5pqy9rDFIcT8zr8lp8L5+7+1xWNOUMHn5
+# zLx33bPgbu6VUUMRwiyxJRQWc/X+ExRW/hMvmnCNA1JtGMWr5/bHx0ztAQujNLXN
+# 5JJQAU6/QfmHmsk=
 # SIG # End signature block

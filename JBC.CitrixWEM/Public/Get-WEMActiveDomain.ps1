@@ -1,4 +1,4 @@
-function Get-WEMActiveDomain {
+﻿function Get-WEMActiveDomain {
     <#
     .SYNOPSIS
         Gets the currently active WEM AD Forest and Domain for the session.
@@ -31,11 +31,15 @@ function Get-WEMActiveDomain {
             throw "No active domain is set in the current session. Please use Set-WEMActiveDomain to set one."
         }
 
-        $DomainDetails = @{
+        $DomainDetails = [ordered]@{
             Forest = $Connection.ActiveForestName
             Domain = $Connection.ActiveDomainName
         }
-
+        if ($Connection.PSObject.Properties['AvailableDomains'] -and $Connection.PSObject.Properties['AvailableDomains'].Length -gt 0) {
+            $DomainDetails.AvailableDomains = $Connection.AvailableDomains
+        } else {
+            $DomainDetails.AvailableDomains = @()
+        }
         Write-Output ([PSCustomObject]$DomainDetails)
     } catch {
         Write-Error "Failed to retrieve active WEM AD Domain: $($_.Exception.Message)"
@@ -45,8 +49,8 @@ function Get-WEMActiveDomain {
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCm4ys+wyy+uzBY
-# XSe0/+Tic6mgREEryTtHzxX307Py0aCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCTh6v5jZ0/NJoo
+# cemMdz6KPKGJOEMrJz22/2/suGQ3CqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -222,31 +226,31 @@ function Get-WEMActiveDomain {
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCAC1YXX4CN5a82QnfWf1ixUVFfCi/YmhqAjygY/Xglf
-# 1jANBgkqhkiG9w0BAQEFAASCAYBUM/dnKcoGStOAkTHJal3w0gtXgyQ8J3cPJPCR
-# 5il92KQcclbRqXVBEC0kpIu9XD/HvadsYqZVEWOLZ6fpdXpqGu7ohjwwezpkGzPZ
-# zYW9C8hsI292x8p01HwT2Jr+jt8QICvbspfG9YXPDEnOHj2iQ+RO++n1tPJ9fZA9
-# JWQ0ln3xzfzLpuNLrqr3qtXLSam2LX0RCBIvrHImZz33MWJrTDgFZoJ/cEyMxTfs
-# 1vA6mzmUm/Kdb1haUUmHc3Xb32GZnDCEUbEt/0rVMcsGiyadCsawTmftSdUHL23t
-# kLSSVXH/20oIloG76OUCSgbpHDRhrCzDZUYfpgVQM8cJGK5dTeiMMEuT9c8FjBdZ
-# g7d31Nj7mCyzJRLFWfd18JsPMZCerrKajiRdq17FqEOqDQTVqXCPDHYKdEpt6iuX
-# KthwPN2WMBf73oZW2AXJQDCtyLQlsPYvdRRRx03QEnvwbZrtye9xbgmr111zonGE
-# ZnpbCJ13a83yO3ogTmn5M+ZIy6uhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBbOCwlhHFFYlDnGC35pBxuiDNaVdtJWswHmQ7QojjE
+# HzANBgkqhkiG9w0BAQEFAASCAYC18qkZfNt0CQPuI6OiS8okR+Ml5+Gl8jT65RJy
+# SGwndzgxIRJnxct5OAAXQgMWHZeAhZC9G/ZvxyaSZcx8fxETi3xsjdBFOD3kpeCJ
+# VC49kMJtk03IRKsxut2EahL6jnoUi3vB6N4njZTZVUW0/CyCw2PHVB8D1dqVHexz
+# 5Fh7am9WcU+iM+ccI+zZOXMJrQqwmazm2DLMT2zHVE0A2o3MrKnF51cN1Zn2VGDI
+# brk7dkgBhpaNOFZzsQKpuoMsazZ6vfx2qeo0BeTjSfhh3HN/kG8T8P9/HDeUJZn2
+# k0nrDdhKjH4JvO2TSKYqibFvmPKHGhUB7K2UgV5lgpjJd+YCmR/a4ZGbnZXiTLmn
+# txUBQiiEt1FH44e7xL6wqJm1Srap7+QuSPWoyh2Kfv50yGnAFvXh24I0+hD+8uLH
+# rVX4rLRozQZaJ2L08rhx1mDxbIHEt9hMQyfp//09EdRPyzqjDmy3g6lTeU7Cs/B2
+# lOqWcTYlXx1h660tOl7S2511Z/qhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTExMTEwOTU2NDZaMD8GCSqGSIb3
-# DQEJBDEyBDBYg2I1nvJRSsTQHR7gcgFzEsQUS7z8zPN/DkUdRS+v3EveQesGMs9k
-# ZCH5rvzKvYYwDQYJKoZIhvcNAQEBBQAEggIAK2vq7OkCiZYjpD2tD49RveqkYm1a
-# OJ8744IL5dZ9pfxnYNsz+U0ozDnX0fFTzhSpuUs6WNWjSij8hpajdGaDIlx3Ibn8
-# gde3DDo/C2W+rlGr3rM3FC5qianpz5rN/fGBLuHEBKrf3vsj5rxaR/C2Z2cZi6CD
-# colVWWhwq5ZA8B9+x8j86cloQIckHGbK75Ody1J0mC6l0b9KTuPYErtKhXH31ByP
-# i6b/VB+j7s6jn4j4cRBXXllqFInmnTWp3VBODt6ZozPY9MyMLBNTL9aPe64gi7b8
-# KPDI3tkm1+kBT0EsOSBUKELhPlfR9aD+44ZYieJyB/FcZATvzE+YuuMgv3FGa72+
-# r83fJs0j8clQAhE87jDfNbn57w2Ov8J+b9I1IwzIk4f+hbGGRN4zCJlxD7jKU2iF
-# NU5q8SZfzlzGB3sGUZ8BVlywSKn3fsnxwg5P3Pqs3UilHrSaCn375N/NJXdJh7r4
-# ICwL2igAQ1Pn22HGt1L/PlbD6PD8fvTkUtcing0utrDLF8pRDcd/wrf483fr2r4O
-# 2l/3TyuKH2uvb/5tD+6LFVir7OEr/zs6yEF0VuHrHa18PUQcpE0WLeBCalmnyNVW
-# +KQv/S5xaaRzj9zDJe2YYFDmxRiJQh8Ufu2caNJyKY2p6g1ZV9wAsLULHYJNl9kX
-# 4oC0MiMsviM5Ppg=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMDMyMTI2MjhaMD8GCSqGSIb3
+# DQEJBDEyBDDR+dF5zmA7P0Gxo5mhBhGuG8BFxI2E7DtbNur0k+rHR2mGZPlVX1oZ
+# wlkRXPXcg8MwDQYJKoZIhvcNAQEBBQAEggIAenpObaMz6ruedJZFlrZp9fkikcbQ
+# 56Uqf7iyQl+6GmGLI6J9+qFbEXyK9VqBnGNaBcs5dF9f4J2+nXcsIe+PopmxCbHG
+# iQikpWblj5IlnsEdsktN/l786Hw4zQ9+CKBS9zfGHxFJyDQDJWPw9wmSeN1HIJo4
+# ummMN/sz+zKshqG762qJYIBK2ZqwzFH7U1SJ/bsD0d4Sd1wYS2djO1FbsOx2wvB+
+# 7SQ+Rg56PghdLfBAmERXkPba7qzEN4QnXZiPLG+z/v5RAgsCIuuOQMOrPdbErh3+
+# g9UbN8f0YzWD9qqMqhiKsDa/olHKFbaoyz0LsJ6JA1sLUbZ5V5mrBYL7V01igqk1
+# 0ee+52DHpbo9Tqq78bGQXAlgINnXl0jYJd6rWMhrOu7KOKVpreahKvPG9hTGxGMR
+# 6wZvY1Y5OyKLax8WPm+VENuUGiMzXDkYVkVGL7NJC3DEaLUgls2UDnCZZZK1qva3
+# psf5BP5VF0itGQ5ne/eUBDadpoUp9jOfBzQAsDDJoo9IKsV+mmGaK4MEeIGxprjW
+# X1S4GcT3QtXy/sr0JeC2RUHM4tOUu2xwOWoaelU1RpWjyBA6fcXnpujmkGAx5Zo9
+# eNLhhRwK241DlMat9+wneVvVzQRbqmSzuXtMcCZ6CMmItVcfBuZ6tCN+bn69Zm2F
+# nKHvTWHid1V2zA8=
 # SIG # End signature block

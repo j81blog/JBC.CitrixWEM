@@ -23,132 +23,152 @@
     if ($script:WemApiConnection.IsConnected -ne $true) {
         throw "Not connected to WEM API. Please run Connect-WEMApi first."
     }
-    $Params = @{
-        XmlFilePath = $XmlFilePath
-        ExportFor   = "WEM"
-    }
-    if ($PSBoundParameters.ContainsKey('DomainFqdn')) {
-        $Params.DomainFqdn = $DomainFqdn
-    }
-    if (Get-WEMConfigurationSite | Where-Object { $_.id -eq $ConfigurationSiteID }) {
-        Set-WEMActiveConfigurationSite -Id $ConfigurationSiteID
-    } else {
-        throw "Configuration Site with ID $ConfigurationSiteID could not be found."
-    }
-    $itemsToProcess = @(Get-IvantiWCPrinterMapping @Params)
+    if ($ActiveDomain = Get-WEMActiveDomain) {
 
-    if ($GUI.IsPresent -eq $true) {
-        $itemsToProcess = @(
-            $itemsToProcess | Select-ObjectFromGrid -Title "Select Printer Mappings to import from Ivanti IWC" `
-                -ColumnsToShow @('PrinterPath', 'Enabled', 'Comment', 'Location', 'Driver')
-        )
-    }
-    if (-not $itemsToProcess -or $itemsToProcess.Count -eq 0) {
-        Write-Warning "No printer mappings found to import."
-        return
-    }
-
-    Write-Host "We got $($itemsToProcess.count) printer mappings"
-    foreach ( $Item in $itemsToProcess ) {
-        if ($Item.Success -and $Item.Success -eq $true) {
-            continue
+        $Params = @{
+            XmlFilePath = $XmlFilePath
+            ExportFor   = "WEM"
         }
-        $Params = $Item.WEMPrinterParams | ConvertTo-Hashtable
-        $Forest = (Get-WEMActiveDomain).Forest
-        $Domain = (Get-WEMActiveDomain).Domain
-        if (-not ($Item.Enabled -eq $true)) {
-            Write-Host "Skipping Printer, Printer entry `"$($Item.PrinterPath)`" is not enabled" -ForegroundColor Yellow
-            continue
+        if ($PSBoundParameters.ContainsKey('DomainFqdn')) {
+            $Params.DomainFqdn = $DomainFqdn
         }
+        if (Get-WEMConfigurationSite | Where-Object { $_.id -eq $ConfigurationSiteID }) {
+            Set-WEMActiveConfigurationSite -Id $ConfigurationSiteID
+        } else {
+            throw "Configuration Site with ID $ConfigurationSiteID could not be found."
+        }
+        $itemsToProcess = @(Get-IvantiWCPrinterMapping @Params)
 
-        if (-not $Forest -or -not $Domain) {
-            Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
+        if ($GUI.IsPresent -eq $true) {
+            $itemsToProcess = @(
+                $itemsToProcess | Select-ObjectFromGrid -Title "Select Printer Mappings to import from Ivanti IWC" `
+                    -ColumnsToShow @('PrinterPath', 'Enabled', 'Comment', 'Location', 'Driver')
+            )
+        }
+        if (-not $itemsToProcess -or $itemsToProcess.Count -eq 0) {
+            Write-Warning "No printer mappings found to import."
             return
         }
-        try {
-            Write-Verbose "Creating new WEM printer $($Item.PrinterPath)"
-            try {
-                $WEMPrinter = New-WEMPrinter @Params -PassThru
-                Write-Host "Successfully created the printer `"$($Item.PrinterPath)`"" -ForegroundColor Green
-            } catch {
-                Write-Host "Error creating WEM printer $($Item.PrinterPath), Error $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
-                Write-Host "Script Name: $($_.InvocationInfo.ScriptName)" -ForegroundColor Red
-                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+
+        Write-Host "We got $($itemsToProcess.count) printer mappings"
+        foreach ( $Item in $itemsToProcess ) {
+            if ($Item.Success -and $Item.Success -eq $true) {
                 continue
             }
-            # Check if Printer was created
-            if (-not $WEMPrinter) {
-                Write-Error "Printer $($Item.PrinterPath) not found in WEM"
-                return
-            } else {
-                Write-Host "WEM printer $($WEMPrinter.Name) with path $($WEMPrinter.PrinterPath) created successfully." -ForegroundColor Green
+            $Params = $Item.WEMPrinterParams | ConvertTo-Hashtable
+
+            $Forest = $ActiveDomain.Forest
+            $Domain = $ActiveDomain.Domain
+            $AvailableDomains = $ActiveDomain.AvailableDomains
+
+            if (-not ($Item.Enabled -eq $true)) {
+                Write-Host "Skipping Printer, Printer entry `"$($Item.PrinterPath)`" is not enabled" -ForegroundColor Yellow
+                continue
             }
 
-            foreach ($WEMAssignment in $Item.WEMAssignments) {
-                if ($WEMAssignment.Name -like "*\*") {
-                    $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
-                } else {
-                    $ADObjectName = $WEMAssignment.Name
-                }
-                $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $Domain, $ADObjectName
-                $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
-                if (-not $WEMAssignmentTarget) {
-                    # Find the group or user in Active Directory using the WEM cmdlets
-                    # The Where-Object ensures an exact match on the account name
-                    if ($WEMAssignment.Type -ieq "user") {
-                        $ADObject = Get-WEMADUser -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            Write-Host "Could not find user with name `"$($ADObjectName)`""
-                            Write-Warning "Known issue, we are looking at this issue"
-                            continue
-                        }
-                    } else {
-                        $ADObject = Get-WEMADGroup -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            <# There seems to be a bug with long group names#>
-                            $MaxLength = "$($ADObjectName)".Length
-                            if ($MaxLength -gt 23) {
-                                $MaxLength = 23
-                            }
-                            $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
-                            $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            Write-Host "Could not find group with name `"$($ADObjectName)`""
-                            continue
-                        }
-                    }
-                    # Create a new assignment target in WEM using the AD group's properties
-                    # The -PassThru parameter outputs the newly created object to the pipeline
-                    $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
-                    Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
-                } else {
-                    Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
-                }
-                # Assign the printer to the target group
-                $WEMAssignmentParams = $Item.WEMAssignmentParams | ConvertTo-Hashtable
-                $WEMPrinterAssignment = New-WEMPrinterAssignment -Target $WEMAssignmentTarget -Printer $WEMPrinter -PassThru @WEMAssignmentParams
-                if ($WEMPrinterAssignment) {
-                    Write-Host "Successfully created WEM printer assignment for $($WEMAssignment.Name)" -ForegroundColor Green
-                } else {
-                    Write-Error "Failed to create WEM printer assignment for $($WEMAssignment.Name)"
-                }
+            if (-not $Forest -or -not $Domain) {
+                Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
+                return
             }
-            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force
-        } catch {
-            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
-            Write-Host "Error creating WEM printer $($Item.PrinterPath), ErrorDetails`r`n $(Get-ExceptionDetails -ErrorRecord $_ -AsPlainText)" -ForegroundColor Red
-            continue
+            try {
+                Write-Verbose "Creating new WEM printer $($Item.PrinterPath)"
+                try {
+                    $WEMPrinter = New-WEMPrinter @Params -PassThru
+                    Write-Host "Successfully created the printer `"$($Item.PrinterPath)`"" -ForegroundColor Green
+                } catch {
+                    Write-Host "Error creating WEM printer $($Item.PrinterPath), Error $($_.Exception.Message)" -ForegroundColor Red
+                    Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
+                    Write-Host "Script Name: $($_.InvocationInfo.ScriptName)" -ForegroundColor Red
+                    $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+                    continue
+                }
+                # Check if Printer was created
+                if (-not $WEMPrinter) {
+                    Write-Error "Printer $($Item.PrinterPath) not found in WEM"
+                    return
+                } else {
+                    Write-Host "WEM printer $($WEMPrinter.Name) with path $($WEMPrinter.PrinterPath) created successfully." -ForegroundColor Green
+                }
+
+                foreach ($WEMAssignment in $Item.WEMAssignments) {
+                    if ($WEMAssignment.Name -like "*\*") {
+                        $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
+                    } else {
+                        $ADObjectName = $WEMAssignment.Name
+                    }
+                    $AssignmentDomain = $null
+                    if ($WEMAssignment.DomainFQDN) {
+                        $AssignmentDomain = $AvailableDomains | Where-Object { $_.fqdn -eq $WEMAssignment.DomainFQDN } | Select-Object -ExpandProperty fqdn -ErrorAction SilentlyContinue
+                    }
+                    if ($WEMAssignment.DomainNETBIOS) {
+                        $AssignmentDomain = $AvailableDomains | Where-Object { $_.netBiosName -eq $WEMAssignment.DomainNETBIOS } | Select-Object -ExpandProperty fqdn -ErrorAction SilentlyContinue
+                    }
+                    if ([string]::IsNullOrEmpty($AssignmentDomain)) {
+                        $AssignmentDomain = $Domain
+                    }
+
+                    $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $AssignmentDomain, $ADObjectName
+                    $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
+                    if (-not $WEMAssignmentTarget) {
+                        # Find the group or user in Active Directory using the WEM cmdlets
+                        # The Where-Object ensures an exact match on the account name
+                        if ($WEMAssignment.Type -ieq "user") {
+                            $ADObject = Get-WEMADUser -Filter $ADObjectName -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                Write-Host "Could not find user with name `"$($ADObjectName)`""
+                                Write-Warning "Known issue, we are looking at this issue"
+                                continue
+                            }
+                        } else {
+                            $ADObject = Get-WEMADGroup -Filter $ADObjectName -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                <# There seems to be a bug with long group names#>
+                                $MaxLength = "$($ADObjectName)".Length
+                                if ($MaxLength -gt 23) {
+                                    $MaxLength = 23
+                                }
+                                $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
+                                $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                Write-Host "Could not find group with name `"$($ADObjectName)`""
+                                continue
+                            }
+                        }
+                        # Create a new assignment target in WEM using the AD group's properties
+                        # The -PassThru parameter outputs the newly created object to the pipeline
+                        $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
+                        Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
+                    } else {
+                        Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
+                    }
+                    # Assign the printer to the target group
+                    $WEMAssignmentParams = $Item.WEMAssignmentParams | ConvertTo-Hashtable
+                    $WEMPrinterAssignment = New-WEMPrinterAssignment -Target $WEMAssignmentTarget -Printer $WEMPrinter -PassThru @WEMAssignmentParams
+                    if ($WEMPrinterAssignment) {
+                        Write-Host "Successfully created WEM printer assignment for $($WEMAssignment.Name)" -ForegroundColor Green
+                    } else {
+                        Write-Error "Failed to create WEM printer assignment for $($WEMAssignment.Name)"
+                    }
+                }
+                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force
+            } catch {
+                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+                Write-Host "Error creating WEM printer $($Item.PrinterPath), ErrorDetails`r`n $(Get-ExceptionDetails -ErrorRecord $_ -AsPlainText)" -ForegroundColor Red
+                continue
+            }
         }
+    } else {
+        Write-Error "Failed to retrieve active WEM AD Domain. Please ensure you configure the active domain correctly using Set-WEMActiveDomain [-ForestName <ForestName> -DomainName <DomainName>]."
     }
+
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCA4Tfgu7o22u0IV
-# MQi6xX7LNoXKXMuJT0LJGYsO4LCV6qCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCA/SppBB+kKiLM7
+# q+KB/VR2yk0wolVGs1E+gBTSPVB98qCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -324,31 +344,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCDlVDypPqcY2eTyxUPLBI564nYEOED/ftsKOkv6fPWh
-# VjANBgkqhkiG9w0BAQEFAASCAYBc2yseKvvLjFsXJrFX+DeWcy+lFMnIwshVjmiq
-# /zNVG+dgTJHTV+BH3p8iBtrqzqa8BVY9mh21+4DcOjlHd7esNsu7N0xDkoOAffll
-# GSIhs4ODy6ZU76CRIYJr2OFQjhFe0a7PmdBofXOCOyxzIlUEGvVLrFQKkXj2lWHr
-# YjgXdlpXod/G8TvgXyizmN7e1EgfJqQtqQpxC9uafLwloHFG5KG2/1/fugK156ew
-# 6na0hL7Z3Y+kWXdQtAjN5cP7Br0J6SGkLBwgGB84stlG69nOumjJyQIrwwneVFvb
-# huzr5/frU8tfzfksnb4+dtIyq9JdJxx1GF521PD/rWbvThADqWCxiBZhYE/9cto9
-# 4g6sCqeDrNULTgcglKpTK1z0RFnTx2enGYyOhY7Q4z8T6GEXTQq/bKF7BQWNQIkR
-# 5x/RvnzV55Q4i68B9hsMelzIs9MDmhwfnaLs11sS/ondPJfyIDsb8lBwJ4VjLC/x
-# kA8JnnX1bpWAsWdDGwLNfd3FKx6hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCAysCl1eXA06d7jp3HlwTtecEArr2zWJyRPWxu8GQFQ
+# BDANBgkqhkiG9w0BAQEFAASCAYDA84szG1yIILPBDhecPv9Yzrnv0glFY79XbHKC
+# LiWyiU1UTgMagf+B92hnu/KhuFO0fk+1re4o61+8MzidYkB4WRPqgOrYzu7KA50i
+# ONBBGAXmz2FCUlZ9L74bDFtWrrQP27dP8dt+06GapRCTOY7xPYdQ/wN5VsWCKvmL
+# RNjA8rQa9qV1ZbqllsrM8XbJ2UL6qT3BCFkdRkSIl91SPBrPC8TTuTW/FPd9SNet
+# xCfYvsxnCjZ7aTE+3nvdaoVHqzF01/5wQ/c6kuEGwzq/vsVqN+Gb5im5O9jAjoEG
+# Kev4FuerlTC/8AhhcatvBMKx/UXVqiOJpDzKMCVuMTsYCx+SY8dR9HyQnJswPlfJ
+# r/VwIUKoxMKio1UIb86QBSPGXFRxwkcfIWevbtwLFbujC/6B+QpjQ48x4x3BPISl
+# XP9QHYZefr1kxCJ+WblGL0Qiyq2rtJaiYFix5joPb5ox8krpFIiCn8DakX+HPBCn
+# /K8ypfhD7ltE/yc4Gny/QsLeymmhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjQwODMwMjJaMD8GCSqGSIb3
-# DQEJBDEyBDB16069QllaMAjhecPgXP7V9WGTmu/lVNQIj42AeLTEDo5h5FCp1+ng
-# LbLiGdHpT5AwDQYJKoZIhvcNAQEBBQAEggIAH1d9RdCeiKGsByVZxjMNe2L+wVwQ
-# lU4FQE0p49Fsfa43UJahrIMlyZ5+hf/eiEsmCd88U14fPgcxi/jjj0YZtgT1Bylw
-# +TKhaR+KdRI2vROSGGXrj0eDRfk5LD7UmVAQu0v2dqaPyo/doHxh4u1pqGe1AhKx
-# 7f1YRpbIkGBF9HSFIbXeGpxeWU4qURIluyYshB4D8dUMQlZmCD6V7Gx3SlInyBk6
-# ggo0r3lV4Ck6W02DbERzlvQQmgpSb2JuNMGxwbpSQRSkQvbIlucTgizPPZXs5pwf
-# 1tsUL0BASjE6WTE7wXbspLcWZnaZ9qYXnzfERQaGedUS5iai6fJGEW8S9cAaQDap
-# IGuxpW2Nq+Mck+msX6zyCSim9kdc5+uH/i5fpWMUmjHU1Z5w24qNXI7Lhpq6U4I+
-# 7b20kXpKDgAsBapIzwbKamTNmwFpw7zwE7qOb1xMzOn9uPYv5Rnig8JVK1kqbUqO
-# YjFwP5QG+BOKJ0SfCyw+g4AKWskvKA34bxbTWrDEUdlKF0lz3d7WRXKYyp5lbJXU
-# r/VFud4wh1w5lbvFMT4o5gfAztpN+S8bG5Ob1UJkMRfi/CodYIT0w/vzvuWX9K0w
-# UG7JZ9kl5juyHuCWoSd3idzT8e2I+sBRYxDVvyRQ8XCQ41AU1NdlhzyrOntG9RRn
-# GD+0svTw5T8qnYM=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMDMyMTI2NDVaMD8GCSqGSIb3
+# DQEJBDEyBDAYUkOBlbL2hgguFbVIcKrnSWapMfRJfg91oDbETH23QYdzTsqaDPaZ
+# qRlEgC4gM88wDQYJKoZIhvcNAQEBBQAEggIAlPf0KWbmDf46ziWUm0Auoal4avPD
+# xHOdt2ifO9x5cyGn4q0WAC5UvDPBMaTfwU3XzjgOr9Ta0jD5YEu25Wti/a3J1rzE
+# ZwKHBXmzZMDZigMPt7QMv9yjaEAX989Z12mde2B6VIIzqePKVxRRXJXCJN33VoZc
+# XsXbzXMa1gXNBeH3LFbHhDCLH+HwJ3Z+DenyGmdSW9p0kU7cA/3Hr7hWUojiWHu1
+# axjOdSsy1j4MhwyD9lpavV8OJcS3Q1K8jdvvG2HP9tli/ynGAi+wKs9QakgntNyA
+# Z8tRG8cfnvYVi+ce2nRjjgAb28FebTIDNOh+87R3p1QqqZfOnlDC1xXzki3fpEoW
+# 55iCLNDEgEhm82C8klcqcCs/elKSoUEiUfkLUkw4p8lsbEGJIPLtrOP2E39TVOcY
+# 937ci6879l26ZTVOjTaqWarGobHxqOUV6qBpio0ZMe9jFeoTSDBLwNCtRq3f5Ols
+# BZoozawQOPQak1p2FmjVGFEMfgdBBM308EZ88Sg2sGIOmnjkTdAnuxfabj8dD52q
+# kAJyujHKVSXhW4lnM7dVZUE1rkOuYisjuE3JRaYUr9qWXkhGj3r5a89NwIbSXhEq
+# tsL4+IBZHhMTNAPLK/ftr0bWxfxxIOE4xV/5BqbL8srU14zJUIPT1mPbqUrtHCfX
+# MtTEgwy/BAkx6OY=
 # SIG # End signature block

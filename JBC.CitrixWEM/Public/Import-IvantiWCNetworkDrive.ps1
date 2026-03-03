@@ -23,135 +23,155 @@
     if ($script:WemApiConnection.IsConnected -ne $true) {
         throw "Not connected to WEM API. Please run Connect-WEMApi first."
     }
-    $Params = @{
-        XmlFilePath = $XmlFilePath
-        ExportFor   = "WEM"
-    }
-    if ($PSBoundParameters.ContainsKey('DomainFqdn')) {
-        $Params.DomainFqdn = $DomainFqdn
-    }
-    if (Get-WEMConfigurationSite | Where-Object { $_.id -eq $ConfigurationSiteID }) {
-        Set-WEMActiveConfigurationSite -Id $ConfigurationSiteID
-    } else {
-        throw "Configuration Site with ID $ConfigurationSiteID could not be found."
-    }
-    $itemsToProcess = @(Get-IvantiWCNetworkDrive @Params)
+    if ($ActiveDomain = Get-WEMActiveDomain) {
 
-    if ($GUI.IsPresent -eq $true) {
-        $itemsToProcess = @(
-            $itemsToProcess | Select-ObjectFromGrid -Title "Select Network Drives to import from Ivanti IWC" `
-                -ColumnsToShow @('Label', 'Enabled', 'DriveLetter', 'Action', 'NetworkPath', 'Description')
-        )
-    }
-    if (-not $itemsToProcess -or $itemsToProcess.Count -eq 0) {
-        Write-Warning "No network drives found to import."
-        return
-    }
-
-    Write-Host "We got $($itemsToProcess.count) network drives"
-    foreach ( $Item in $itemsToProcess ) {
-        if ($Item.Success -and $Item.Success -eq $true) {
-            continue
+        $Params = @{
+            XmlFilePath = $XmlFilePath
+            ExportFor   = "WEM"
         }
-        $Params = $Item.WEMNetworkDriveParams | ConvertTo-Hashtable
-        $Forest = (Get-WEMActiveDomain).Forest
-        $Domain = (Get-WEMActiveDomain).Domain
-        if (-not ($Item.Enabled -eq $true)) {
-            Write-Host "Skipping Network Drive, Network Drive entry `"$($Item.Label)`" is not enabled" -ForegroundColor Yellow
-            continue
+        if ($PSBoundParameters.ContainsKey('DomainFqdn')) {
+            $Params.DomainFqdn = $DomainFqdn
         }
+        if (Get-WEMConfigurationSite | Where-Object { $_.id -eq $ConfigurationSiteID }) {
+            Set-WEMActiveConfigurationSite -Id $ConfigurationSiteID
+        } else {
+            throw "Configuration Site with ID $ConfigurationSiteID could not be found."
+        }
+        $itemsToProcess = @(Get-IvantiWCNetworkDrive @Params)
 
-        if (-not $Forest -or -not $Domain) {
-            Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
+        if ($GUI.IsPresent -eq $true) {
+            $itemsToProcess = @(
+                $itemsToProcess | Select-ObjectFromGrid -Title "Select Network Drives to import from Ivanti IWC" `
+                    -ColumnsToShow @('Label', 'Enabled', 'DriveLetter', 'Action', 'NetworkPath', 'Description')
+            )
+        }
+        if (-not $itemsToProcess -or $itemsToProcess.Count -eq 0) {
+            Write-Warning "No network drives found to import."
             return
         }
-        try {
-            Write-Verbose "Creating new WEM network drive $($Item.Label)"
-            try {
-                $WEMNetworkDrive = New-WEMNetworkDrive @Params -PassThru
-                Write-Host "Successfully created the network drive `"$($Item.Label)`"" -ForegroundColor Green
-            } catch {
-                Write-Host "Error creating WEM network drive $($Item.Label), Error $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
-                Write-Host "Script Name: $($_.InvocationInfo.ScriptName)" -ForegroundColor Red
-                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+
+        Write-Host "We got $($itemsToProcess.count) network drives"
+        foreach ( $Item in $itemsToProcess ) {
+            if ($Item.Success -and $Item.Success -eq $true) {
                 continue
             }
-            # Check if Network Drive was created
-            if (-not $WEMNetworkDrive) {
-                Write-Error "Network Drive $($Item.Label) not found in WEM"
-                return
-            } else {
-                Write-Host "WEM network drive $($WEMNetworkDrive.DisplayName) with path $($WEMNetworkDrive.TargetPath) created successfully." -ForegroundColor Green
+            $Params = $Item.WEMNetworkDriveParams | ConvertTo-Hashtable
+
+            $Forest = $ActiveDomain.Forest
+            $Domain = $ActiveDomain.Domain
+            $AvailableDomains = $ActiveDomain.AvailableDomains
+
+            if (-not ($Item.Enabled -eq $true)) {
+                Write-Host "Skipping Network Drive, Network Drive entry `"$($Item.Label)`" is not enabled" -ForegroundColor Yellow
+                continue
             }
 
-            foreach ($WEMAssignment in $Item.WEMAssignments) {
-                if ($WEMAssignment.Name -like "*\*") {
-                    $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
-                } else {
-                    $ADObjectName = $WEMAssignment.Name
-                }
-                $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $Domain, $ADObjectName
-                Write-Verbose "[$($WEMAssignment.Name)] Processing WEM assignment for target group/user: $WEMAssignmentTargetGroupName"
-                $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
-                if (-not $WEMAssignmentTarget) {
-                    # Find the group or user in Active Directory using the WEM cmdlets
-                    # The Where-Object ensures an exact match on the account name
-                    if ($WEMAssignment.Type -ieq "user") {
-                        $ADObject = Get-WEMADUser -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            Write-Host "Could not find user with name `"$($ADObjectName)`""
-                            Write-Warning "Known issue, we are looking at this issue"
-                            continue
-                        }
-                    } else {
-                        $ADObject = Get-WEMADGroup -Filter $ADObjectName -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            <# There seems to be a bug with long group names#>
-                            $MaxLength = "$($ADObjectName)".Length
-                            if ($MaxLength -gt 23) {
-                                $MaxLength = 23
-                            }
-                            $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
-                            $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
-                        }
-                        if ([String]::IsNullOrEmpty($ADObject)) {
-                            Write-Host "Could not find group with name `"$($ADObjectName)`""
-                            continue
-                        }
-                    }
-                    # Create a new assignment target in WEM using the AD group's properties
-                    # The -PassThru parameter outputs the newly created object to the pipeline
-                    $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
-                    Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
-                } else {
-                    Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
-                }
-                # Assign the network drive to the target group
-                Write-Verbose "[$($WEMAssignment.Name)] Building WEM network drive assignment"
-                $WEMAssignmentParams = $Item.WEMAssignmentParams | ConvertTo-Hashtable
-                Write-Verbose "[$($WEMAssignment.Name)] Creating WEM network drive assignment"
-                $WEMNetworkDriveAssignment = New-WEMNetworkDriveAssignment -Target $WEMAssignmentTarget -NetworkDrive $WEMNetworkDrive -PassThru @WEMAssignmentParams
-                if ($WEMNetworkDriveAssignment) {
-                    Write-Host "Successfully created WEM network drive assignment for $($WEMAssignment.Name)" -ForegroundColor Green
-                } else {
-                    Write-Error "Failed to create WEM network drive assignment for $($WEMAssignment.Name)"
-                }
+            if (-not $Forest -or -not $Domain) {
+                Write-Error "Unable to retrieve Active Directory domain information from WEM. Please ensure you are connected to the WEM API and that the Active Directory domain is properly configured."
+                return
             }
-            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force
-        } catch {
-            $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
-            Write-Host "Error creating WEM network drive $($Item.Label), ErrorDetails`r`n $(Get-ExceptionDetails -ErrorRecord $_ -AsPlainText)" -ForegroundColor Red
-            continue
+            try {
+                Write-Verbose "Creating new WEM network drive $($Item.Label)"
+                try {
+                    $WEMNetworkDrive = New-WEMNetworkDrive @Params -PassThru
+                    Write-Host "Successfully created the network drive `"$($Item.Label)`"" -ForegroundColor Green
+                } catch {
+                    Write-Host "Error creating WEM network drive $($Item.Label), Error $($_.Exception.Message)" -ForegroundColor Red
+                    Write-Host "At Line: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Red
+                    Write-Host "Script Name: $($_.InvocationInfo.ScriptName)" -ForegroundColor Red
+                    $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+                    continue
+                }
+                # Check if Network Drive was created
+                if (-not $WEMNetworkDrive) {
+                    Write-Error "Network Drive $($Item.Label) not found in WEM"
+                    return
+                } else {
+                    Write-Host "WEM network drive $($WEMNetworkDrive.DisplayName) with path $($WEMNetworkDrive.TargetPath) created successfully." -ForegroundColor Green
+                }
+
+                foreach ($WEMAssignment in $Item.WEMAssignments) {
+                    if ($WEMAssignment.Name -like "*\*") {
+                        $ADObjectName = $WEMAssignment.Name.Split('\')[-1]
+                    } else {
+                        $ADObjectName = $WEMAssignment.Name
+                    }
+                    $AssignmentDomain = $null
+                    if ($WEMAssignment.DomainFQDN) {
+                        $AssignmentDomain = $AvailableDomains | Where-Object { $_.fqdn -eq $WEMAssignment.DomainFQDN } | Select-Object -ExpandProperty fqdn -ErrorAction SilentlyContinue
+                    }
+                    if ($WEMAssignment.DomainNETBIOS) {
+                        $AssignmentDomain = $AvailableDomains | Where-Object { $_.netBiosName -eq $WEMAssignment.DomainNETBIOS } | Select-Object -ExpandProperty fqdn -ErrorAction SilentlyContinue
+                    }
+                    if ([string]::IsNullOrEmpty($AssignmentDomain)) {
+                        $AssignmentDomain = $Domain
+                    }
+
+                    $WEMAssignmentTargetGroupName = '{0}/{1}/{2}' -f $Forest, $AssignmentDomain, $ADObjectName
+                    Write-Verbose "[$($WEMAssignment.Name)] Processing WEM assignment for target group/user: $WEMAssignmentTargetGroupName"
+                    $WEMAssignmentTarget = Get-WEMAssignmentTarget | Where-Object { $_.name -ieq $WEMAssignmentTargetGroupName -or $_.name -ieq $WEMAssignment.Name -or $_.sid -ieq $WEMAssignment.Sid }
+                    if (-not $WEMAssignmentTarget) {
+                        # Find the group or user in Active Directory using the WEM cmdlets
+                        # The Where-Object ensures an exact match on the account name
+                        if ($WEMAssignment.Type -ieq "user") {
+                            $ADObject = Get-WEMADUser -Filter $ADObjectName -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                Write-Host "Could not find user with name `"$($ADObjectName)`""
+                                Write-Warning "Known issue, we are looking at this issue"
+                                continue
+                            }
+                        } else {
+                            $ADObject = Get-WEMADGroup -Filter $ADObjectName -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                <# There seems to be a bug with long group names#>
+                                $MaxLength = "$($ADObjectName)".Length
+                                if ($MaxLength -gt 23) {
+                                    $MaxLength = 23
+                                }
+                                $ADObjectAlternativeSearch = "$($ADObjectName)".Substring(0, $MaxLength)
+                                $ADObject = Get-WEMADGroup -Filter $ADObjectAlternativeSearch -ForestName $Forest -DomainName $AssignmentDomain -ErrorAction SilentlyContinue | Where-Object { $_.AccountName -ieq $ADObjectName -or $_.Name -like "*/*/$ADObjectName" }
+                            }
+                            if ([String]::IsNullOrEmpty($ADObject)) {
+                                Write-Host "Could not find group with name `"$($ADObjectName)`""
+                                continue
+                            }
+                        }
+                        # Create a new assignment target in WEM using the AD group's properties
+                        # The -PassThru parameter outputs the newly created object to the pipeline
+                        $WEMAssignmentTarget = New-WEMAssignmentTarget -Sid $ADObject.Sid -Name $ADObject.AccountName -ForestName $ADObject.ForestName -DomainName $ADObject.DomainName -Type $ADObject.Type -PassThru
+                        Write-Host "Created new WEM assignment target for AD group $($ADObject.Name)"
+                    } else {
+                        Write-Host "Found existing WEM assignment target for AD group $($ADObjectName)"
+                    }
+                    # Assign the network drive to the target group
+                    Write-Verbose "[$($WEMAssignment.Name)] Building WEM network drive assignment"
+                    $WEMAssignmentParams = $Item.WEMAssignmentParams | ConvertTo-Hashtable
+                    Write-Verbose "[$($WEMAssignment.Name)] Creating WEM network drive assignment"
+                    $WEMNetworkDriveAssignment = New-WEMNetworkDriveAssignment -Target $WEMAssignmentTarget -NetworkDrive $WEMNetworkDrive -PassThru @WEMAssignmentParams
+                    if ($WEMNetworkDriveAssignment) {
+                        Write-Host "Successfully created WEM network drive assignment for $($WEMAssignment.Name)" -ForegroundColor Green
+                    } else {
+                        Write-Error "Failed to create WEM network drive assignment for $($WEMAssignment.Name)"
+                    }
+                }
+                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $true -Force
+            } catch {
+                $Item | Add-Member -MemberType NoteProperty -Name "Success" -Value $false -Force
+                Write-Host "Error creating WEM network drive $($Item.Label), ErrorDetails`r`n $(Get-ExceptionDetails -ErrorRecord $_ -AsPlainText)" -ForegroundColor Red
+                continue
+            }
         }
+    } else {
+        Write-Error "Failed to retrieve active WEM AD Domain. Please ensure you configure the active domain correctly using Set-WEMActiveDomain [-ForestName <ForestName> -DomainName <DomainName>]."
     }
+
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBRE78CrV7gO4Ls
-# Pzgbv+jApntZqJbt1ZzBsCaFmZ43gqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCD50xSzBEzJ2vC3
+# Pn49xS/bXsAZAGOuo/iiQPaEzYIcvqCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -327,31 +347,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCA7ySXyEZJUPnvlbMkdsNOC72KLEoUNQBLPla8ulL62
-# gzANBgkqhkiG9w0BAQEFAASCAYCBX4EoHyej8S2YSH4AvE65/rPaN0dhiUBh4snl
-# cEzCUUa3NKqfU/5KyJqhye0gZY5OJRGIidH27IEFD/MtE99ErsuLdRNLRJA9JFcr
-# CUAf6IPLl76GpBZdUxaSiIuC8X4xAEY5rom2sAsMtDJQF2RLHZLVJQ1R2JQS58yL
-# VIsuVzA9/0Gq8g3ETjs0Wu6Pi2D/fucRRhucy8T+BmIZjM34q/rPh1hnwgKuhQ+7
-# tWl3SzAOJepMadkSpTJSArC682t197/S+kgdoZcmOK3bEGnOEca+2EKBLe2Zu9ah
-# nIpkGTQgtRcm6f05X0T2W5hWCOdL/QExqoQFRfyfzrNR/ku8NC00u0atlyZln+uy
-# +SgV1zpk0l4xedAeEjr4VuZT1ja0K9XnRLl96lVR4djw0mRHeAJEXhWlVwVpEpBN
-# eBw8P2TCugzZbGrP08XVDGk/QsUG52Y2DCppKeG0TGRsVshlskigbGpTr8o7vvdN
-# 0+EpR3gBunhi5VpCPTvSqInqn2GhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCB51uSpDopedW6bJg88LvUyOOVlO8JMnPpKx0C39IOg
+# LjANBgkqhkiG9w0BAQEFAASCAYAr1osGcRAs1KU9wr3qLpNtpbdEjjWEyB3U1WYX
+# JbtE8lhzeWiCbT1mildKgybZS4NnxRsz5nrWCacb1KGAhQRi19aap1waQNsz5vJ2
+# 9DcOcCnmBfsw81tZOCWYFSZyL2gvhMD/qXeCwj+6lB4kpX86XK49O8eT/BYpfCz6
+# huKQNrLYvXZe5PIvKSpLOuyIze/XGDMqu6bsDCDoat54R14tbjcGym3Ot0YnPE1O
+# Q4izs5KBElRGSg8HyUxJ9nBxZJDbxzwX0Ny+YM/pXrbJual9/IG1UzsucgppJd9M
+# JAK4BbJ6Wteljvc/axK/IplW8Ay5n/VO5aZsSMw5MeKwXoVMK+kEXhJgkvx/t5PA
+# ZhkDWuic5kEBXYu9ozSNt5e6dlZbkF6GYis5x+LROdzwwe3m5eqg1EgSH88+FRUb
+# m2qxeviuNHfmRrXvdA/bGFw7zr+N+vpCp7rr5JcpQFsA30BDP1IWnJnbUnLIw/Zy
+# uU1PjTj3mUnyP5KCYGaxg+jsJ02hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjQwODUwNTJaMD8GCSqGSIb3
-# DQEJBDEyBDC4z7rXEASdMUt06jgREwJqKMeMgSMrvRRkud4sDlMYbsC2O3FwGkOo
-# 9kr0U5/Tp/EwDQYJKoZIhvcNAQEBBQAEggIABqTjfvbNcDELaBRU+wAKffmnpolS
-# 8VDWHeZlph4QsawTE8EChmEIbKstaRGJOJe6tnSEob388ajEe4mC4TsN75Emfc/F
-# C4L4SeLC2+tPO9UKGlurMTP6M/pNDYjSN+aT63Mnfjmotg/RLmj58xViGHP+sFqR
-# aIm9F8yScsOEDuwK5fhAK6G0/Jt4SDVRIu/g/CRdl/6EfhW7Y/zXGR5xgVMGnPLU
-# kDoTR9bnAZS7+79M7CtE1hYmWu1fzUgJeC78jKe1T6jBHbcRfvGu6Ux4UYcV+28M
-# 4Bo+ViFT4hLNsZVCyMD+rGHoPNhCkUzo1AqNybcAKHRB6Ct4dcKo+AnMVAz6SuRH
-# 44M53BR1pHF5c8M0Us6z9i7RPSuNpb/oqFPQED3whLgz39WCVvmque1arYubj9nJ
-# TwfsMRG3BA7fLoC1FLUvXPQfomuKCXCRciBKtmBx/TyzBX2PFqLgbzdF82g84x0F
-# RmGCXp6Gn+G7q3WRalLmZyjPaWDfodOjOd6Bkp5NEYJIqBdiPlzfuyD0BMNnTcq3
-# 3jPSJBFQWfzlo1sbjceIPpGzNeSKyZVobl/MUQnsl/5P6W9RINwn9c9/ptyTcLmW
-# rJHEromixNKsoDWDYRvKHAkqnaIh3lLwcKCWUwVBlqqxOfUlft+CmnMlfWx4j0FG
-# QzV/PdsdrMA++7Q=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMDMyMTI2NDFaMD8GCSqGSIb3
+# DQEJBDEyBDDL+0J2SVzjWIfzCPE+CllxzCBgm32sWB4HbCo8Pm7Y4q2xxMACZGkE
+# +lzwv06DAewwDQYJKoZIhvcNAQEBBQAEggIAsBIkOKL5bpi/+kaDf7U3bqNk/JLE
+# XufUOLSeUTKBg8TB7LvFzlBOmupGHampqvgH6Pa6yImzZf/g6ImKX8uzPSuQ3uUc
+# Eu91yrtKxNWBi9sHIXRTZ4DNgUDgXCM4MnYNc4+riW60kqAtzMT2h8806rwjjAmp
+# OzkRojRF980p7iOva4Zf8Kp+aTXFppkz5yD5o3poouJB5vsPVjK4yG+WdlIApSvv
+# Frck1pSaSC1qCTPEUfKjC4fjl0/SZynHj1ZaKGS3+dAsfmJ4diUlJ9PoDucToZoJ
+# +sAJezyVIatZJXODSPaPrtsvWqrvjXk7KSuGrwnGlKIvXwAkyLMKr9OWcUiLsQJ0
+# LQAgZ0RT9Qf9/u1APj5dkwpwUpt376AOxDfOQCY5n+WhFuGyE5tg1/PapUkW41QB
+# 7Ehsk7YWyX7p7qO+YXv5C7zsAZzo3BNYZTNsIa1N5iyzO4evGxg+6UIHjMGmZWV9
+# T7q9m8Zg2ZGbwqoKgkUgEm/IeLGKX7rttOzwybxv6LQYAQHbI7/tF9LTbuvP64Ld
+# S9JAolCKNT4ZgHxDuoQrARl/myYzQ+XAToDoxqwWso4htKHBjDD5MFwc94Axnz6E
+# yKGeYmB5MknzRVZ09JJI3KpC9xEDxgUZYRVi2NwJVwrYSqRXgt974QOh2Hwkgk+l
+# vSp2YaNdod6YS5E=
 # SIG # End signature block

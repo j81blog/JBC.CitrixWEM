@@ -3,10 +3,10 @@
 # Check if module info should be shown (can be suppressed in tests)
 if (($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) -and ($Global:WemModuleShowInfo -ne $false)) {
     Write-Host ""
-    Write-Warning "**************************************************************************************************************"
-    Write-Warning "*                                This module is still in active development.                                 *"
-    Write-Warning "*                      Please test thoroughly before using in production environments!                       *"
-    Write-Warning "**************************************************************************************************************"
+    Write-Warning "********************************************************************************************************"
+    Write-Warning "*                             This module is still in active development.                              *"
+    Write-Warning "*                   Please test thoroughly before using in production environments!                    *"
+    Write-Warning "********************************************************************************************************"
     Write-Host ""
 }
 
@@ -68,8 +68,8 @@ if (($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) -and ($Global:Wem
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBvY4uYNWtPq/Dr
-# tsfoXrprw9kTl5NGm3jZTaAyuNob4qCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCArhQLlxN8tmz6k
+# n7f9fdnnpBtgpjI31bLlNvtG47GJ06CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -245,31 +245,31 @@ if (($Script:WEMModuleConfig.Config.ShowModuleInfo -ne $false) -and ($Global:Wem
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCBZjQxYDCuOJ5/V2AAtInR+9l0druLeTzYIbiYkI3yF
-# nTANBgkqhkiG9w0BAQEFAASCAYBdiVDCe48cxdvWn0n68K74tGiZT5jwzPy3or7l
-# 5374Rw1xvc17WAKY7mYRGWnDk34Z1r4rA8FSTniS4F/RTTB74zwwPl+vWfTJ1mB4
-# AjwpbCVA/duIaTZYYcG9E9tsMUgLaQ449mCfyZQgiuwPPJDCzmEUTp6mGsWDu0kj
-# 4YkVgt1/KSc+bReTgFlxA/J3rVwLm9u1GogGnP/vAe0vvhwsFxBakQJXja0m/Bgy
-# G7kHZP9qMuBP7DOiTJorgW878bNvXjYx+TKde2ww2kwoCMnlhWNOPP9VrAgtVNTm
-# E22nUJWooLEySaxaiFcUQfR7TK+NI9o0SQ1i3UzWk7wFtclBCK9nIDxgNOdlMrLh
-# WZYZYuJ1DUbm7UBeoUiPp77cIyDT66PFOMI1755qhBkfSeBnK9ivsLV3q/9CPnhF
-# 02y/m+A3uw3r3iMa1lIjPgMzS0u4IQr6WLD5GUtn6gHs6YLMhrqmNxeyQwOlljOr
-# Cxg4GJwGhdvzqp0f/IX98a8Xg2ehggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCBjvPKIqL6cmkL3JX21l832PLypsJAWwULkl/FmARnE
+# FTANBgkqhkiG9w0BAQEFAASCAYACj/T5B3epq5J35CIxvJkdcknEjULWHhvlkpli
+# eWonbZTZBjzKcA8ehhqbFUNZLFxAnoEcaUCBmJdHegQRu08T7s87JOBktHcNkJkH
+# xiLb0i0KunioYPsegK2gSdYRJb+WjDRdE3GG9lUeFGKJdrAm/VUQG1T4Z8rkK3dq
+# oDqtndradIvoZAJHXVD1tP5kub1bZnUmkRwq1NO6UK5GRS3ujKBlFPZp7/9vLFZ9
+# IpRtjcQI0Ih0yMtHatdy3/P58r1tR7ggAOHprCE1b2rOvyAj7Oj0Jzm3qjRklUdl
+# ehW+gXWXM+0qmO0FlaC5Zgt2mZGFVxttiL+fDLbUWlJhf8oXBnnzJoAelm7EIKKQ
+# mZfyzUWky6jKCSC8d/lQ+KHEUO1iu1MBpr/YiNDGuGg6Vu/F1RvrqBI/YjJX7B8B
+# ikZn6ceWcBz4e0ZXC81YvKemc/rFgK6xVBHar9DuoIfJlYYmeUxKPntZgiGRjkPI
+# 9TmtEKftu5B6tVXFXBmqZJzKb/ChggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjQwODMwMjZaMD8GCSqGSIb3
-# DQEJBDEyBDA9vMQQuk+AcxsBfg8tuUh08OB5S01JBTqcjPH1yzEzym23+QX+N+o6
-# WMmJUmI46QAwDQYJKoZIhvcNAQEBBQAEggIAY89kNbLUSL2NcbAdmtzi4d/P0RU9
-# gJrfenjkq9E0glOtInUwDNRUnC1Jat3jnFGvvnl9q7+ALwdm13Y2VTP94E0gSnrC
-# lgstEvlNEZ5dn9O7yqD+ghuvBc2tWViGcHRzqPiO8Lfhy2sGFRAuNUbJHd82boks
-# puy5btluiXkePChQOU3Kcaie/+CdebqTWToBKoiH4hNS01fLp4VnhaiVYsBqxqoI
-# UaTd4ATEqZyneCe+kqyP2sDJMJfO6WkOecmnbZUXjmeFLxPbk/tjlPORI5Sn2Fny
-# dQ9EuUX5cNcm/NvWTgIjwj+t11fprVoSzFxBL7T4ANdt0XZKaOJvcFeFeaLgy27l
-# YvPbUNnjprRkqy/YmtFS8wlJcvunrESdYiVioketinee00r44wrNJxAtDL/slt9b
-# iuQyKnbCB144fOmu/incotDo4Cg7pJGE1UftYkBOmmXbLqWCkbhZSo3rZ0o1Bduu
-# Yo0T3AT2wtaluDhoyjfeSiknNinqAHjulLYW5K3EKLDSlBjbT5QDTxJ5X0ynBiWU
-# zzWw1aeNGFdjgqZUZjh6HQd9hVSvpezFhXRolpMfN7c/n8zO2dBHOFdwNbOhO7Fv
-# JrwQ21h1m253WeXRoWch8BiD6+PuXlt6lFp7/ueYAazAI0ztsvHB0ZhUDvJpumt3
-# 43chHt/WmteQLF0=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMDMyMTI2NTVaMD8GCSqGSIb3
+# DQEJBDEyBDAf7YgdPo23qrqRmYfQD5SDCqBM4xcS8fKpMLqQTeP3kCydVncSkowG
+# kd3uIyvWw00wDQYJKoZIhvcNAQEBBQAEggIAoM9plGqd80YmDEPz5jzUcNQDai8F
+# aAvg0XIHRm7sF/da192jKKXU/lLg9/ZKJNO9xN6X4EtfzcQcLpNNch64E3tw6SsN
+# 2vo+dQgJmDoVMo4v5/rl4iBclvpLb1oU1iJxdKLA3ICJEoyNGQffRefkC5W7xMI5
+# IC37i3gyz0/Qx4yA+TN7COYKJczElj8PqvGlPQswymTo7+GsAgIOmlqtBh14HMwa
+# az5bxQJNiZhMsDXp2oE3ffUyqyzZchZVyGBJfwEMzUeodmC432iTeXiIvAm/XvMb
+# v2iDSQy8cg+sU7q8HqJeaJRGrBb7nH6FzwTmjgcT6vViniwPTTfbHw3uODMwo67Z
+# WZ2Wvac0RD+Yc9wnY/J1USE2CtRvq5weFrkB3nIH1XEcDPKVZmX8G4QG3rVAI2C3
+# gqa9DCDuJj420QvBh1jFv8cJLniku1E3eQPv+0whhGzqA2xJ2Fy4/nPaMGDRngca
+# HPcvnpNZ5jyQz1Vm0BdPGL6KTo5MXG7LSXid0/JUFnaWfxBdqF6oFftJbUuJdI5G
+# 58x4O/qhzLKeBpWuxG1TW+Lt1XpL3LE7ukAtxsxOlnugs1Q5UeA4t6y7AeHLR3IU
+# XHz7pRi4k43RBPqxl1ULPgUvj2wLrJeGOclYPYv5LH5MJGmJ9C3rNdOxFcwbIJeS
+# 6qOm8sy6XIlpnp0=
 # SIG # End signature block
