@@ -147,6 +147,7 @@
     $Counter = 0
     Write-Verbose "Found $TotalNumberOfItems applications to process in the Ivanti Workspace Control XML."
     for ($i = 0; $i -lt $ApplicationsToProcess.Count; $i++) {
+        $Script:Warning = $false
         $Counter++
         $Application = $ApplicationsToProcess[$i]
         Write-Progress -Activity "Processing Applications" -Status "Processing item $($Counter) of $($TotalNumberOfItems)" -CurrentOperation "Application: `"$($Application.configuration.title)`"" -PercentComplete (($Counter / $TotalNumberOfItems) * 100)
@@ -167,7 +168,34 @@
         $DisplayName = "$($Application.configuration.title)"
         $Description = "$($Application.configuration.description)"
         $AppID = "$($Application.appid)"
+        if ($CommandLine -like '*"%*%"*') {
+            #Replace ..."%...%"... to ...%...%... to prevent issues with environment variables in the command line
+            $CommandLine = $CommandLine -replace '"%([^%]+)%"', '%$1%'
+            Write-Warning "[$($Application.appid)] $($DisplayName): Application command line contained environment variables wrapped in quotes. These have been adjusted to ensure proper variable expansion. Original: `"$($Application.configuration.commandline)`", Adjusted: `"$CommandLine`""
+            $Script:Warning = $true
+        }
 
+        if ($CommandLine -like "*.cmd" -or $CommandLine -like "*.bat") {
+            Write-Warning "[$($Application.appid)] $($DisplayName): Application has a command line that points to a batch file."
+            Write-Warning "This is not supported and will be skipped. Consider changing the command line to point to the actual executable and use the batch file for any necessary setup or parameter handling."
+            Write-Warning "Example: `cmd.exe /C `"$CommandLine`""
+            Write-Warning "********************************************************************************************************"
+            continue
+        }
+        if ($CommandLine -like "*.ps1") {
+            Write-Warning "[$($Application.appid)] $($DisplayName): Application has a command line that points to a PowerShell script."
+            Write-Warning "This is not supported and will be skipped. Consider changing the command line to point to `powershell.exe` and use the `-File` parameter to specify the script."
+            Write-Warning "Example: `powershell.exe -ExecutionPolicy Bypass -File `"$CommandLine`""
+            Write-Warning "********************************************************************************************************"
+            continue
+        }
+        if ($CommandLine -like "*.vbs") {
+            Write-Warning "[$($Application.appid)] $($DisplayName): Application has a command line that points to a VBScript file."
+            Write-Warning "This is not supported and will be skipped. Consider changing the command line to point to `cscript.exe` and use the appropriate parameters to specify the script."
+            Write-Warning "Example: `cscript.exe //B //Nologo `"$CommandLine`""
+            Write-Warning "********************************************************************************************************"
+            continue
+        }
         $BinaryIconData = $null
         if (-not [string]::IsNullOrEmpty($($Application.configuration.icon32x256))) {
             $BinaryIconData = $($Application.configuration.icon32x256)
@@ -183,7 +211,8 @@
                 $IconStream = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAABxpJREFUWEe1lwtwFOUdwH+Xe1+Oy93lcpiEJEgxg5SnSCkiBRuhAwXSIE8ZKhRbS0tFLEPB4hBERdQSi0OlrWOjHRlFQShCi0TLK7wESQgRI+ZV8oCQkFyyt5e927vr7CZ3JELglHZndr7d7/b29/v/v++/+62G/9O2PPcttzYoL4jTxk3T6vRjwqFQW3HxkXkfbv/zIaANCClozf+KHwFqtNpxWq32fovZaMvs34fkZCfJvZ1UVF7i44On21/IXTAZ+Azw3JbAsmXbzAar8JsIMN5isg3ITKNPSiIpyYno9Vr8/iCSX8YfCCLLQbbtOMCzq+etAt4HvvpGArm52wztCD8FbY4SoclosGX2TyE9za1CrVYzkiTTLgXUVvIHCYXCDH5nHpqQTOmjO3h3635FIA/IB87eVCAC1IQ1D8Tp9FNNJkOvAXelkpHuJj01iV69LPgDMj5fAF97xy7LyrCGWVTi4rTHyLkfN/PdzUrG4fwT+9j6+oeKwCudAsXXCeTm/s0e0OqOhsPhXmazqc/dmWncmeEmIy0Jm82iptQr+hF9HbsCDIfDKqCjCaM09xT2waCFoqke4r84jDd9KD5Rwwc7D91cYPWzb4cXL5pEgs2MxWxUgYIo4fX6VXBADqrAfXtPU1tzlXirkVlzx16Dd7hwxm9luEOitdGDr1XEEm/E5bLxznsxCKz7/cPUXfIgiH4KPipizNiB7N9XRKvHS1NjG4GAHC0cW4KFh+ePVyP3+2W8og9RFAmFQiSnJJLoSsCRaMNoNmICcp/beusMPPPUXM5+XsfO7cdoafaqQOXmymYyG4iL03BHshOr1cSgIWlRqC0hHndvBympLmwJVrXIlYRE2nhgbSwCa1fNpbi0ltde3YNer1Oj6ZOepAKVER44KBVR9BEOyyS5naSmunC5HeiUa78GjZwrIjbgmVgEclfOobi0hlaPD4vViNfrQxAENbVutxO3205KahLmeEXoWoQRWEtJntpvHbxMbSPXOIF1sQis+d1sCg6U0CYImM0GeqtpTcKVZO92wxvBFYmqLRp8sgtLQjz2MXmY+uWo/3MBz8Ui8PSK2eoTa8qUMdEoe4J17Y8cV2/WMGrhGVobK/ny42W0iUFSZ+4mzT2M52MRWL18Fu/tPMj02Vk3jVgr+yh5LRWzrlktw1AIQp3t/bPWQGM+pKyhprqFsoInGb08zPr1MVTBU7+dyfZdh5jWKXCjiaWXfVS8mcLdD6wgPmUGhLzR0gxrjGha3oW6tWpfs28op05WM3ppMxteiEFg5bIZfLD7MJNnZ103q5U064ISlW/cweAJT2NO/glUTAdRfape27R2CLbgE6HwKFhnnGFgxjBe2hCDwIqlD7FrzxEezBlB/dt3quk19s3GNfol9CYnFW/1o/89D2FPvRcuv6jCZRlKSkBqB70BRoyAQACOH4fgyDfQD1jIIBu8/GIMAssfn87uvYWMUwRedzB0fiVXzufTVL6T1svFDJm4koT+S+Dir6FlF/V1UPqVHX3fbLD2RTyxlklLdlC8fTr1lkcw/zBfnRvDHLDx5RgEnlySw55/HWXs7CxqX9Vw34w1IFWBPRtMAzrSfGkDNL1JXS2UVmfQK/uACg+GoPmvDu76/lK+PLsTy8yi6OQcmQR5f4hB4IlfZfPPj44zakYW9Zs0/GDOmuiE6jrMtTVQUmbHkv1vNM5hUVD7mTwCtQcxjM8npLdH++9Lhj9ujEHg8V9OY1/BCYZnZ3HlLw70cSEyv9OKwwk6XYdCVSV8rqR99EZ0mQuj5aekWslC15KMHI9Lg015MQgs+cVU9n9ykoGTswj4JaRzf8J3ZiMhoSZa73EZ2ehG5KJxDFPhPUGdJnCZwiSZgmhkic1bdt36bbj40Sl8cuBT+k/I6rhx5CHT5bhbf5ff4zQQgTr0Mpqgn4ryGo5/WkaLx4sgeNrz1i/eBPwdOHfdikhZkDy2cDIHDp8mbXxWt1TeCppkCuEyyvh97VRV11NRWc+F8noar9QJgYAk/eP9LUcaLl+sBoqAAuDiDQV+/sgkDhV+hntMd4Gu4xqJNAoVRcor6jh+qgxRWUEJbYHTJwsulJ49dqHh8kUFVA8o8P90gi8B7TcU+Nn8H1F4rAj797oLGOLAaQaHXok0gOTzqdATp8oQhHZ8onAzaANwtfODROp8S6sTutuHiTIEC+ZN5NiJYizDs4hAk81BrFq5A1pex+GjpUj+gLJYCR87vPt8D5H2CO1aztcJzJ8zgfNlVQy8dwh2QxhREKisauBCeS0Xaxu/daTdXxbXzq4TmDRxFA0NV9WlWNPVVmrrm5AkKXSicO8XtxNpTAKLHlu3Kr1f5vMaDbR6PN9qTHsCxSSgrJwyB4zMEYSmoXU1FQHgSpfZG9OY3q6A8rBNBFIAfecX7A1n7zcF9XT9fwHj4Gdd/ykNBQAAAABJRU5ErkJggg=="
             }
         } catch {
-            Write-Warning "Failed to process icon data for application '[$($Application.appid)] $DisplayName'. Error: $_. Using default icon."
+            Write-Warning "[$($Application.appid)] $($DisplayName): Failed to process icon data, Using default icon. Error: $($_.Exception.Message)"
+            $Script:Warning = $true
             $IconStream = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAABxpJREFUWEe1lwtwFOUdwH+Xe1+Oy93lcpiEJEgxg5SnSCkiBRuhAwXSIE8ZKhRbS0tFLEPB4hBERdQSi0OlrWOjHRlFQShCi0TLK7wESQgRI+ZV8oCQkFyyt5e927vr7CZ3JELglHZndr7d7/b29/v/v++/+62G/9O2PPcttzYoL4jTxk3T6vRjwqFQW3HxkXkfbv/zIaANCClozf+KHwFqtNpxWq32fovZaMvs34fkZCfJvZ1UVF7i44On21/IXTAZ+Azw3JbAsmXbzAar8JsIMN5isg3ITKNPSiIpyYno9Vr8/iCSX8YfCCLLQbbtOMCzq+etAt4HvvpGArm52wztCD8FbY4SoclosGX2TyE9za1CrVYzkiTTLgXUVvIHCYXCDH5nHpqQTOmjO3h3635FIA/IB87eVCAC1IQ1D8Tp9FNNJkOvAXelkpHuJj01iV69LPgDMj5fAF97xy7LyrCGWVTi4rTHyLkfN/PdzUrG4fwT+9j6+oeKwCudAsXXCeTm/s0e0OqOhsPhXmazqc/dmWncmeEmIy0Jm82iptQr+hF9HbsCDIfDKqCjCaM09xT2waCFoqke4r84jDd9KD5Rwwc7D91cYPWzb4cXL5pEgs2MxWxUgYIo4fX6VXBADqrAfXtPU1tzlXirkVlzx16Dd7hwxm9luEOitdGDr1XEEm/E5bLxznsxCKz7/cPUXfIgiH4KPipizNiB7N9XRKvHS1NjG4GAHC0cW4KFh+ePVyP3+2W8og9RFAmFQiSnJJLoSsCRaMNoNmICcp/beusMPPPUXM5+XsfO7cdoafaqQOXmymYyG4iL03BHshOr1cSgIWlRqC0hHndvBympLmwJVrXIlYRE2nhgbSwCa1fNpbi0ltde3YNer1Oj6ZOepAKVER44KBVR9BEOyyS5naSmunC5HeiUa78GjZwrIjbgmVgEclfOobi0hlaPD4vViNfrQxAENbVutxO3205KahLmeEXoWoQRWEtJntpvHbxMbSPXOIF1sQis+d1sCg6U0CYImM0GeqtpTcKVZO92wxvBFYmqLRp8sgtLQjz2MXmY+uWo/3MBz8Ui8PSK2eoTa8qUMdEoe4J17Y8cV2/WMGrhGVobK/ny42W0iUFSZ+4mzT2M52MRWL18Fu/tPMj02Vk3jVgr+yh5LRWzrlktw1AIQp3t/bPWQGM+pKyhprqFsoInGb08zPr1MVTBU7+dyfZdh5jWKXCjiaWXfVS8mcLdD6wgPmUGhLzR0gxrjGha3oW6tWpfs28op05WM3ppMxteiEFg5bIZfLD7MJNnZ103q5U064ISlW/cweAJT2NO/glUTAdRfape27R2CLbgE6HwKFhnnGFgxjBe2hCDwIqlD7FrzxEezBlB/dt3quk19s3GNfol9CYnFW/1o/89D2FPvRcuv6jCZRlKSkBqB70BRoyAQACOH4fgyDfQD1jIIBu8/GIMAssfn87uvYWMUwRedzB0fiVXzufTVL6T1svFDJm4koT+S+Dir6FlF/V1UPqVHX3fbLD2RTyxlklLdlC8fTr1lkcw/zBfnRvDHLDx5RgEnlySw55/HWXs7CxqX9Vw34w1IFWBPRtMAzrSfGkDNL1JXS2UVmfQK/uACg+GoPmvDu76/lK+PLsTy8yi6OQcmQR5f4hB4IlfZfPPj44zakYW9Zs0/GDOmuiE6jrMtTVQUmbHkv1vNM5hUVD7mTwCtQcxjM8npLdH++9Lhj9ujEHg8V9OY1/BCYZnZ3HlLw70cSEyv9OKwwk6XYdCVSV8rqR99EZ0mQuj5aekWslC15KMHI9Lg015MQgs+cVU9n9ykoGTswj4JaRzf8J3ZiMhoSZa73EZ2ehG5KJxDFPhPUGdJnCZwiSZgmhkic1bdt36bbj40Sl8cuBT+k/I6rhx5CHT5bhbf5ff4zQQgTr0Mpqgn4ryGo5/WkaLx4sgeNrz1i/eBPwdOHfdikhZkDy2cDIHDp8mbXxWt1TeCppkCuEyyvh97VRV11NRWc+F8noar9QJgYAk/eP9LUcaLl+sBoqAAuDiDQV+/sgkDhV+hntMd4Gu4xqJNAoVRcor6jh+qgxRWUEJbYHTJwsulJ49dqHh8kUFVA8o8P90gi8B7TcU+Nn8H1F4rAj797oLGOLAaQaHXok0gOTzqdATp8oQhHZ8onAzaANwtfODROp8S6sTutuHiTIEC+ZN5NiJYizDs4hAk81BrFq5A1pex+GjpUj+gLJYCR87vPt8D5H2CO1aztcJzJ8zgfNlVQy8dwh2QxhREKisauBCeS0Xaxu/daTdXxbXzq4TmDRxFA0NV9WlWNPVVmrrm5AkKXSicO8XtxNpTAKLHlu3Kr1f5vMaDbR6PN9qTHsCxSSgrJwyB4zMEYSmoXU1FQHgSpfZG9OY3q6A8rBNBFIAfecX7A1n7zcF9XT9fwHj4Gdd/ykNBQAAAABJRU5ErkJggg=="
         }
         $StartMenuPath = "$($Application.configuration.menu)"
@@ -264,6 +293,10 @@
                 $Output | Add-Member -MemberType NoteProperty -Name "AppVentiXAssignments" -Value $AppVentiXAssignments
             }
         }
+        if ($Script:Warning -eq $true) {
+            # New line after warnings for better readability in the console output
+            Write-Warning "********************************************************************************************************"
+        }
 
         if ($AsJson) {
             $JsonOutput += $Output
@@ -282,8 +315,8 @@
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCXXlyVx2TqTbt9
-# 0YK0kOQzU5xucBf4eCgZHSvdQqxrpaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCyxUuVIhf+jty1
+# p+QU7MCoEyq6PjTadRmRZdlzBq4q+6CCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -459,31 +492,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCALY7reSZ2oyF0JomACN/wZj/Z3jgGXMNYuO3rgdA9k
-# qDANBgkqhkiG9w0BAQEFAASCAYCBipgoh8dpP4g95agxlpxj1Ccrqz4bcRnXEgdH
-# uA67slMXSndLBfSUT4qJ+ZF6znkMgjDzAVotlrnBv3v1E35TGUVSm4JkwUzOCCba
-# SpvK2Ek765hFu0RrlrvuCmvSmjOarcHMunASO7avyiouFN4wwFymtkLnvnJcDZ1x
-# XIAWX4rSia5Rdaod8W0pAoIc0L8jOdsy7u20ynEJFPmiOdKllpv8z92qUAGElqIL
-# 7pI6yBVazxjE+KtDN2jN3J5d+uHykRm1FdQuPfCp9FZY+L2S/QYu6cujlLQPeOsT
-# tgAHUGTBtISiiBFUiqNl5lnH+H9wcPQ6ZgcbnbSW0aHfbn1+QzK5EDkmQT3lBZCc
-# 5zS0UV/t8xCDjSst7ccW1KINwyDIewler1wpL6FPyoW57YjnUH8M/kVmaLQnlwqp
-# lu6G+2aMpmoieQavuBGH88b5+sZUQLxRLm1SdZ3R3ZiINeFay+4h7QLdo1s5YBRC
-# GPtpSs5yxairlPt6RKTZ1JktsoChggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCCc5zmiZpmwkGPq9VCfRimE/NWClPGgZBRbZaiCpCT/
+# nzANBgkqhkiG9w0BAQEFAASCAYAE0IeY0OAeEVGntwk4njQhbvFM1PjdW7HJyb4+
+# BpJw2AJSGZFXHIZNtdxbgf6G9iSVC3vq1ry32ZK4OdGjgKCicGtQSmU5NRkwOg7C
+# 34FJRJvhdZLVHD6isxydAYiAy7+RRMligjEtp35nCBRmt+PmnKAQ7EIDHxLP6q7t
+# TK1fIS7lhMkRJdIxVzeiHm7CGL1Cx1u+CRptMqMOOMA+ZpDN6Y0Pwv0/wDfdLVi8
+# 9+UDs9WcC192hqtmLoqyFrZoNRdDirF5QI0nS/WWkButWVyDhFj0dQc7O6LNGqYy
+# +ajj7rJ3rcr5djmDyLQLkQW2ZkD/yhbJ3Q98sFE4+eRdt/zs9BYNniBlLmc/2p9Q
+# CA34/39T0MInKfIDqMk5Zxd1vr3iqD+fiy+gSWvJDNJMmY3ZwXkRqzGPDsNk1rXn
+# AcLhbpy9yAtF6iurxrW7k/zxqPKGNI98MIueliVuJf6VQ3Z603o/Xwh3V6vqkHvn
+# MIGSPsfZLBe5Xeqf9NBOn9thEyShggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMDMyMTI2MjVaMD8GCSqGSIb3
-# DQEJBDEyBDA+KS15OwEjMmnG0uLYRwPge4EFsak9g/aZQTHG7gJTMGt2E59C9ckc
-# uHznZXXySi8wDQYJKoZIhvcNAQEBBQAEggIAngbEBETOpQOrf+Y1+A6DYNwCuI8c
-# Eg9TGRZL+pyfVTnvVgvADu70frKpWq0to7eN8JxAf073/hTr+9WTmrUVUyUobR91
-# HVZ9sH2sSOw9werEZtGoKl6ufpSd/nR77ojf8qCknlxS1k3IYrkqBvPbMf9Q5ms+
-# QmPhjfiNBUleFvcd8rocnmJ45mBeRA7QpCEA8J0z0b0qRkWcSW7SZ0JNdBgilvrZ
-# 3+VXwYNqSrQYS37vQZMBVBAqyEoAgLjE2Geep3+r/WZ6ZxTmVurUAmtzt5VZQj8f
-# AHFkxLnXycEoTExSn9KfucISsflxPWzG6tYq+bBa9tQy+UHsxrNzeEL4xs7ocRoV
-# KGHSwgsa2j6kjBbOAvgZJvb2mBMCAn3eFqMZElIbaVD4Qtk3LlE99DXq6YxW5V88
-# Hw2ztW2XPdrQjyMKium21CodyvvrjWcFK5ArY0gkbcI5mUK/B1QomxdHMImwApRE
-# yTZ04GHqvsXUOehvnlDzgHzol34t0cSIaMPoDHsP7Jv00OhiKThDWRdvwXpqZWZ7
-# WugyByK0VvCRA8a+MZHTnIiJjGMhMQjEqm4p0yiny5pVr2t3bZp39VkmFEoLDKuU
-# qfQNiSPA1f4OU0hGDpXh88ngcO3WYYhr+RJivEjqKMTntn5iT+cT+wqup0lhHqkv
-# X9WqLWOAXRK4qjY=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMTIxMTI4MzFaMD8GCSqGSIb3
+# DQEJBDEyBDCxYYtAPy0OUPhIEP9oW8VoTgRLdtzYUc9Ir2WtmJfu0Jwyun3ceJC0
+# 44b1pbF+93MwDQYJKoZIhvcNAQEBBQAEggIAizqnFin2poI0LkKzbaVgzRszdB8R
+# Oae2VgN/awqas+L9MDleUxpwexG5CQTrRNxJp667tdHA6dQmRvthb2YdqeWJWubk
+# /tI2SNMFosT3eG73DND/a+AjOGPi3lwFkLe9Bu0UVMtKYO5PSeTcf2KhdDrtDEJh
+# I6XaWX/poPOG+UtQgJAe5H4Wko/U0/xlg5nqslQkpuiDEasHJzje7/uP+bU1Ybax
+# ki8a0bqI80qt2/FoDCqkvHqKDibUv5BQCz2ti85W1ywBrRfKqRxRzecvk8tuK8i2
+# AKkobBHOfBPYAk5mlFaf3gYItL6Uit3BijjBfcmduRsHMBDnXCP5FSRLNcOPcacG
+# OCIbVsMNBBYEpjFXUVh765Wke+07x3HNhDFWFNDbq5aLrSjF4yf8g+MWxN08nXqg
+# Zfdxk4YUaqO90WhcPCTAoGBQ3gQm/6hqqOybnOE5qGydKT1VL78tNHrmxw78wSqb
+# 32QepEwgQmjxK2jGkwnsR8jtE0VxhmNDIY+I6X4t5gGf6+g0m3EfF0PXx52Bo83f
+# 6SOkJsv3L/pFxL6OPs72E1WfWUBG4EEM0nsDFzcl89RHRdCYB8oCqUP3euQ2IsHf
+# ILdPsdAdHOI22fNLv/wJp3oWvENUeXPunTHuIhqB8ChGq8f2kFgGpiGWuLx8IeCT
+# mKiI4X4J7yb1WQ8=
 # SIG # End signature block

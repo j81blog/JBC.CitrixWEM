@@ -1,145 +1,178 @@
-﻿function ConvertFrom-IvantiAccessControl {
+﻿function Import-WEMPolicyTemplate {
     <#
     .SYNOPSIS
-        Converts Ivanti Workspace Control access control data to assignment objects.
-
+        Uploads a zip file containing ADMX/ADML policy template files to Citrix WEM Cloud.
     .DESCRIPTION
-        Parses access control XML nodes from Ivanti Workspace Control applications and
-        converts them to standardized assignment objects with SID, Name, and Type properties.
-        Handles 'all users' scenarios, group/user assignments, and provides warnings for
-        unsupported configurations.
+        Uploads a zip file (containing .admx and .adml policy definition files) to Citrix WEM Cloud
+        using the Azure Blob Storage SAS upload workflow:
+          1. Requests a SAS write token from the WEM API.
+          2. Uploads the zip file to Azure Blob Storage using the Block Blob protocol
+             (splitting into 4 MB blocks if necessary).
+          3. Commits the block list to finalise the blob.
 
-    .PARAMETER AccessControl
-        The access control XML node from an Ivanti Workspace Control application.
+        This function is Cloud-only; it is not supported on On-Premises WEM deployments.
 
-    .PARAMETER ApplicationTitle
-        The title of the application (used for warning messages).
-
-    .PARAMETER ApplicationState
-        The state of the application (Enabled/Disabled, used for warning messages).
-
+        After a successful upload the zip is staged on the WEM backend. You can monitor
+        progress or trigger further processing through the WEM Admin Console.
+    .PARAMETER Path
+        Path to the .zip file that contains the ADMX and ADML policy template files.
+    .PARAMETER UploadName
+        The remote file name used when staging the zip in the cloud storage container.
+        Defaults to the base name of the supplied file (e.g. "msedge.zip").
     .EXAMPLE
-        ConvertFrom-IvantiAccessControl -AccessControl $app.accesscontrol -ApplicationTitle "MyApp" -ApplicationState "Enabled"
+        PS C:\> Import-WEMPolicyTemplate -Path "C:\Templates\msedge.zip"
 
+        Uploads the Microsoft Edge ADMX/ADML zip to WEM Cloud storage.
+    .EXAMPLE
+        PS C:\> Import-WEMPolicyTemplate -Path "C:\Templates\custom.zip" -UploadName "custom-policies.zip"
+
+        Uploads the zip using a custom remote file name.
     .NOTES
-        Function  : ConvertFrom-IvantiAccessControl
-        Author    : John Billekens
-        CoAuthor  : Claude (Anthropic)
-        Copyright : Copyright (c) John Billekens Consultancy
-        Version   : 2026.306.915
-    #>
-    [CmdletBinding()]
-    [OutputType([PSCustomObject[]])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNull()]
-        [System.Xml.XmlElement]$AccessControl,
+        Version:        1.0
+        Author:         John Billekens Consultancy
+        Co-Author:      GitHub Copilot
+        Creation Date:  2026-02-25
 
-        [Parameter(Mandatory = $true)]
-        [string]$IWCComponentName,
+        Cloud only — the SAS blob write endpoint is not available for On-Premises deployments.
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param (
+        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateScript({
+            if (-not (Test-Path $_ -PathType Leaf)) { throw "File not found: $_" }
+            if ([System.IO.Path]::GetExtension($_) -ne '.zip') { throw "File must be a .zip archive: $_" }
+            $true
+        })]
+        [Alias("FilePath", "FullName")]
+        [string]$Path,
 
         [Parameter(Mandatory = $false)]
-        [ValidateSet('Application', 'Printer', 'NetworkDrive', 'Variable')]
-        [string]$IWCComponent
+        [ValidateNotNullOrEmpty()]
+        [string]$UploadName
     )
 
-    $Assignments = @()
-    $IsApplication = $false
-    $OverruleCheck = $false
-    if ($IWCComponent -ieq 'Application') {
-        $AccessItems = @($AccessControl.grouplist.group)
-        $IsApplication = $true
-        if ([string]::IsNullOrEmpty(($AccessControl.access_mode)) -and $AccessItems.Count -eq 1) {
-            $OverruleCheck = $true
-        }
-    } else {
-        $AccessItems = @($AccessControl.access)
+    begin {
+        # Maximum Azure Blob block size: 4 MB
+        $BlockSizeBytes = 4 * 1024 * 1024
     }
 
-    if ($AccessControl.accesstype -eq "all") {
-        # Assign to everyone
-        $Assignments += [PSCustomObject]@{
-            Sid           = "S-1-1-0"
-            Name          = "Everyone"
-            Type          = "group"
-            DomainNETBIOS = $null
-            DomainFQDN    = $null
-        }
-    } elseif ($OverruleCheck -eq $true -or
-        ($AccessControl.access_mode -ieq 'or' -and $AccessItems.Count -ge 1) -or
-        ($AccessControl.access_mode -ieq 'and' -and $AccessItems.Count -eq 1)) {
-        # Process individual access items
-        foreach ($AccessItem in $AccessItems) {
-            if ($AccessControl.notgrouplist.group -contains $AccessItem) {
-                Write-Warning "$($IWCComponentName): Exclusion rules (not memberof) are currently not supported for $IWCComponent"
-                $Script:Warning = $true
-            } elseif ($AccessItem.type -ieq "global") {
-                $Assignments += [PSCustomObject]@{
-                    Sid           = "S-1-1-0"
-                    Name          = "Everyone"
-                    Type          = "group"
-                    DomainNETBIOS = $null
-                    DomainFQDN    = $null
-                }
-            } elseif ($IsApplication -eq $false -and $AccessItem.type -ne "group" -and $AccessItem.type -ne "user") {
-                Write-Warning "$($IWCComponentName): Unsupported object type '$($AccessItem.type)' for $IWCComponent. Only 'group' or 'user' are supported."
-                $Script:Warning = $true
-            } elseif ($IsApplication -eq $true -and $AccessControl.accesstype -ne "group" -and $AccessControl.accesstype -ne "user") {
-                Write-Warning "$($IWCComponentName): Unsupported access type '$($AccessControl.accesstype)' for $IWCComponent. Only 'group' or 'user' are supported."
-                $Script:Warning = $true
+    process {
+        try {
+            $Connection = Get-WemApiConnection
+
+            if ($Connection.IsOnPrem) {
+                throw "Import-WEMPolicyTemplate is only supported for Citrix WEM Cloud deployments."
+            }
+
+            $ResolvedPath = (Resolve-Path -Path $Path).Path
+            $FileName = if ($PSBoundParameters.ContainsKey('UploadName')) {
+                $UploadName
             } else {
-                if (-not [string]::IsNullOrEmpty($AccessItem.'#text')) {
-                    $ObjectName = $AccessItem.'#text'
-                } elseif ($OverruleCheck -eq $true -and $AccessItem -like "*\*") {
-                    $ObjectName = $AccessItem
-                } else {
-                    $ObjectName = $AccessItem.object
-                }
-                # Strip domain prefix if present
-                Write-Verbose "Processing object '$ObjectName' of type '$($AccessItem.type)'"
-                if ($ObjectName -like "*\*") {
-                    Write-Verbose "Splitting domain and object name for '$ObjectName'"
-                    $DomainNETBIOS, $ObjectName = $ObjectName.Split("\")
-                    $DomainFqdn = Get-ADDomainFQDN -NetBIOSName $DomainNETBIOS -ErrorAction SilentlyContinue
-                } else {
-                    Write-Verbose "No domain prefix found for '$ObjectName'"
-                    $DomainNETBIOS = $null
-                    $DomainFqdn = $null
-                }
-                Write-Verbose "Adding assignment: Name='$ObjectName', Type='$($AccessItem.type)', DomainNETBIOS='$DomainNETBIOS', DomainFQDN='$DomainFqdn', SID='$($AccessItem.sid)'"
-                $Assignments += [PSCustomObject]@{
-                    Sid           = $AccessItem.sid
-                    DomainNETBIOS = $DomainNETBIOS
-                    DomainFQDN    = $DomainFqdn
-                    Name          = $ObjectName
-                    Type          = $AccessItem.type
-                }
+                [System.IO.Path]::GetFileName($ResolvedPath)
             }
-        }
 
-        # Fallback to Everyone if no valid assignments were created
-        if ($Assignments.Count -eq 0) {
-            $Assignments += [PSCustomObject]@{
-                Sid           = "S-1-1-0"
-                Name          = "Everyone"
-                Type          = "group"
-                DomainNETBIOS = $null
-                DomainFQDN    = $null
+            if ($PSCmdlet.ShouldProcess($FileName, "Upload Policy Template zip to WEM Cloud")) {
+
+                # ── Step 1 ── Request a SAS write token ─────────────────────────────────
+                $EncodedBlobPath = [System.Web.HttpUtility]::UrlEncode("upload/$FileName")
+                Write-Verbose "Requesting SAS write token for blob path 'upload/$FileName'..."
+                $SasResult = Invoke-WemApiRequest `
+                    -UriPath "services/wem/export/sas/blob/write?path=$EncodedBlobPath" `
+                    -Method "GET" `
+                    -Connection $Connection
+
+                if (-not $SasResult -or [string]::IsNullOrEmpty($SasResult.uri) -or [string]::IsNullOrEmpty($SasResult.token)) {
+                    throw "Failed to obtain a valid SAS write token from the WEM API."
+                }
+
+                $BlobUri   = $SasResult.uri    # e.g. https://<account>.blob.core.windows.net/<container>/upload/file.zip
+                $SasToken  = $SasResult.token  # e.g. ?sv=...&sp=w
+
+                Write-Verbose "SAS token obtained. Blob URI: $BlobUri"
+
+                # ── Step 2 ── Split file into blocks and upload each block ───────────────
+                $FileBytes = [System.IO.File]::ReadAllBytes($ResolvedPath)
+                $TotalBytes = $FileBytes.Length
+                Write-Verbose "File size: $TotalBytes bytes."
+
+                $BlockIds    = [System.Collections.Generic.List[string]]::new()
+                $BlockIndex  = 0
+                $Offset      = 0
+
+                $BlobHeaders = @{
+                    "Accept"        = "application/json, text/plain, */*"
+                    "Origin"        = "https://wem-productioneu-webconsole-bb.wem.cloud.com"
+                    "x-ms-blob-type" = "BlockBlob"
+                }
+
+                while ($Offset -lt $TotalBytes) {
+                    $Length  = [Math]::Min($BlockSizeBytes, $TotalBytes - $Offset)
+                    $Chunk   = $FileBytes[$Offset..($Offset + $Length - 1)]
+
+                    # Block ID: base64("block-NNNNNN") — matches the pattern observed in browser traffic
+                    $BlockIdPlain  = "block-{0:D6}" -f $BlockIndex
+                    $BlockIdBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($BlockIdPlain))
+                    $BlockIds.Add($BlockIdBase64)
+
+                    $BlockUri = "{0}{1}&comp=block&blockid={2}" -f $BlobUri, $SasToken, [System.Web.HttpUtility]::UrlEncode($BlockIdBase64)
+
+                    Write-Verbose "Uploading block $BlockIndex ($Length bytes): $BlockIdPlain..."
+                    Invoke-WebRequest `
+                        -UseBasicParsing `
+                        -Uri        $BlockUri `
+                        -Method     "PUT" `
+                        -Headers    $BlobHeaders `
+                        -Body       $Chunk `
+                        -ContentType "application/octet-stream" `
+                        -ErrorAction Stop | Out-Null
+
+                    $Offset      += $Length
+                    $BlockIndex++
+                }
+
+                Write-Verbose "$BlockIndex block(s) uploaded successfully."
+
+                # ── Step 3 ── Commit block list ──────────────────────────────────────────
+                $BlockListXml = [System.Text.StringBuilder]::new()
+                [void]$BlockListXml.AppendLine('<?xml version="1.0" encoding="utf-8"?>')
+                [void]$BlockListXml.AppendLine('<BlockList>')
+                foreach ($Id in $BlockIds) {
+                    [void]$BlockListXml.AppendLine("  <Latest>$Id</Latest>")
+                }
+                [void]$BlockListXml.AppendLine('</BlockList>')
+
+                $CommitUri = "{0}{1}&comp=blocklist" -f $BlobUri, $SasToken
+                Write-Verbose "Committing block list..."
+                Invoke-WebRequest `
+                    -UseBasicParsing `
+                    -Uri        $CommitUri `
+                    -Method     "PUT" `
+                    -Headers    $BlobHeaders `
+                    -Body       $BlockListXml.ToString() `
+                    -ContentType "application/xml; charset=utf-8" `
+                    -ErrorAction Stop | Out-Null
+
+                Write-Information "Policy template zip '$FileName' uploaded successfully to WEM Cloud storage."
+                Write-Information "You can now activate the policy templates via the WEM Admin Console under 'Policies and Templates'."
+
+                return [PSCustomObject]@{
+                    FileName   = $FileName
+                    BlobUri    = $BlobUri
+                    Blocks     = $BlockIndex
+                    SizeBytes  = $TotalBytes
+                }
             }
+        } catch {
+            Write-Error "Failed to upload WEM policy template '$Path': $($_.Exception.Message)"
         }
-    } else {
-        # Unsupported access control mode
-        Write-Warning "$($IWCComponentName): Unsupported access control mode '$($AccessControl.access_mode)' with $($AccessItems.Count) item(s) for $IWCComponent."
-        $Script:Warning = $true
     }
-    return $Assignments
 }
 
 # SIG # Begin signature block
 # MIImdwYJKoZIhvcNAQcCoIImaDCCJmQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCApAo0J6r8R2Fz2
-# voKJincIAHZwSAz+abiIzF9r7m6uHKCCIAowggYUMIID/KADAgECAhB6I67aU2mW
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBn/2G6epSIabdI
+# 2XQkjWQKEVkJDd+2go/OgKr2X9zBGaCCIAowggYUMIID/KADAgECAhB6I67aU2mW
 # D5HIPlz0x+M/MA0GCSqGSIb3DQEBDAUAMFcxCzAJBgNVBAYTAkdCMRgwFgYDVQQK
 # Ew9TZWN0aWdvIExpbWl0ZWQxLjAsBgNVBAMTJVNlY3RpZ28gUHVibGljIFRpbWUg
 # U3RhbXBpbmcgUm9vdCBSNDYwHhcNMjEwMzIyMDAwMDAwWhcNMzYwMzIxMjM1OTU5
@@ -315,31 +348,31 @@
 # cnR1bSBDb2RlIFNpZ25pbmcgMjAyMSBDQQIQCDJPnbfakW9j5PKjPF5dUTANBglg
 # hkgBZQMEAgEFAKCBhDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqGSIb3
 # DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3AgEV
-# MC8GCSqGSIb3DQEJBDEiBCCCocTju4kK+PkjJ6nKAICeNCHpD/XEqbJXmMy0RhXA
-# fDANBgkqhkiG9w0BAQEFAASCAYAI1+alQhvMGKXvlcECB3Mudk1V2JpD5RvWzCj8
-# Q4sNoXFhXPO/bmdkQSxfVDN6g6yN23tAnO/nz2XvXugeaIYy/UQcF60kXvw25gz3
-# yA5m0lByA8bUbrr6D/46FqhfMpbOxR/XP3sY6SlXqhP6i29/WRbvUJc0nhfnes9s
-# FxJB0E3rRO7JOTa7RcmkVvO1tbuwigHV+sZOX5nW/jhq0fF0ySZdt8RH6nhRuDDM
-# 3e8zmkhH2o13drYcjgeT/7KA0CN/gUnVccSXN4zDGFqOyEA+jYVuBcXatv57iV3W
-# nsNhFvwchjx7zBN6JXQd7zbNvASp+Wb4ES1RoDK2MGdQXcU09t+ag1c4Y0ASVTBV
-# xwUWmu9Ev7yTYwtiwkKWTgt8tYCtaM5lpJfAg84NoP6trMgX5CJtwZw9LYKfJeN+
-# +UUUyrWJNARJrYDC9tDZ4xjWGhT6/UUTQHoIslSOz7FUwp7sge1KEDV/O+238eMn
-# HW54+2SqAfDn4zbn8vodmsXlq+2hggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
+# MC8GCSqGSIb3DQEJBDEiBCAuetQW/RySnkV7fKxh15ZgCCoxXqfCVKadBvBASmgl
+# QDANBgkqhkiG9w0BAQEFAASCAYCMMMmjCEWYqsp18jZMVhkxU9wbEccSfhpXvm7p
+# aItR3TQUWbaEVoXmmGTP64ZFA61CNTNocSZRfT4exayUR+uyfaalpElNZsz4V9+c
+# x5l8gTj6kdaCQ05mM67JCoL/IcpeWpr5CmNBP9GZxeTZgghMNh61+jKrvItqwO86
+# mq5b8RcwRj1Y/obo+ddcz2EXWAYWxeI8SMaMd7RObnNSzQsILhypnEdVEgvDYKau
+# 5QezcbM6wnXIIcmhGqTY0lIUXwfMu4ZPQjWwh6LmMMH9yjEt3BP2TsyyziTCGBVL
+# dIyS5eNnEARgvkc0jrnCzR2qprrBJpiowqUreCgo4iVZl4kwqwiOG9PTQQ0g8uZT
+# MZum7lCM0IFSzZIocUFdSBj3LVL+fsyCmXaWDqFLRbH1s/0j4m1dImaNkbxX88B0
+# VrUc0TR4Ykclsob02NR0GxSIZak93FQpkGnyYLp3srUY935ufQP6JfH6i3xQVWQt
+# SyCBh0xiBpWNxAcMX2m16bu8osGhggMjMIIDHwYJKoZIhvcNAQkGMYIDEDCCAwwC
 # AQEwajBVMQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMSww
 # KgYDVQQDEyNTZWN0aWdvIFB1YmxpYyBUaW1lIFN0YW1waW5nIENBIFIzNgIRAKQp
 # O24e3denNAiHrXpOtyQwDQYJYIZIAWUDBAICBQCgeTAYBgkqhkiG9w0BCQMxCwYJ
-# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAzMTIxMTI0MzBaMD8GCSqGSIb3
-# DQEJBDEyBDBgd8kd1+0M8mgvc3b5aRL47kTq7V8ARwqLiCpGLSzr4/t2KGlM5mWR
-# WVvQ3/OLlDYwDQYJKoZIhvcNAQEBBQAEggIAVxmkTeKJK2ja8a6BENe8JXzZfasN
-# kTM3yGWof1y7mr+jAL4R1wc1NlYltGxVRBGm3aB0ehpYtFuO+d0sAy/ac8I3ezWU
-# VO3Ngcxa7JKAhpbem6Mg5ZG7FE7kbSMbLvpGT6qnQZdDizZdG/CUTRXrGrwm1cLc
-# 6uZgbvFIBO4ojgJFGj02lMMHA9Y3uiTEfAAZ1x5MMninZmpgPsisxrWFq+o3UUa3
-# JFmU6nzy5oA+EtlKmFVwvAd/JhpjiYDqo1RjEWx1ivTEa6u/mgXIpf5Ver7LLPEZ
-# Vkxy4IiKtGJ7hMIRp2wmEY3tLlFjF7yi7Gc+9EJe/urr+6l8aTtSbQ+subvWCP/h
-# 4+mcB2IMOSt3APyDI1snSzrhFEHJW/nu96xjSeNKGtFFKB0UlOSgRqr4JSyAtOhw
-# tw7MHE8h/5b7jBb99o5NcRTdpHBUUN0GaSJeFFEO/iQgkJYZvWSm/TV+q9meKt1A
-# lczqDLRin2f4nah7rzhvFmm28W6zkVwfHGcpulWTe6mTRX9GtoJdX0am6rBExZ66
-# FLSs/+0K3/LtMYM7QkEy1EAQiwfBqsrAPHz8crtbenZ8qe+BLpQVdbVugZyY2XF/
-# Ur9B0G2nakoe83Sd6ccMs3i8F4DSCHe1ySS0qyQ4nD1jc41sNrD89Ys5q45+dC+O
-# z3KWsMl3hZQAeTE=
+# KoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAyMjYxMDM4MzVaMD8GCSqGSIb3
+# DQEJBDEyBDAj7Ekid6yCgKqFxU4S7IBESN9cwyrYc6V2ITyTjPsqhrUih7kLIrsV
+# xd/+tomX7sYwDQYJKoZIhvcNAQEBBQAEggIAlZGcFXKaUC+raA+RXvx75RZYq1oV
+# 4kKar7axjRh9Fzmkwjr2jN8F9Cv8G1p008FPoqzrJz/QBbALDOu9Ux1zQXiXXOqD
+# 8tLMqmJyXC3pWR7BeU1rD2RUAmOIOUCxAdDFhkCmjP7IxAk4uqNy6kfXndxhvr2J
+# TcN+JQSBwDCU/6w86McNeo416iyZlElJAMcOwcbZX4nq5Kw2MCyf8H3erxHzdLHg
+# kYx+x6c+3Da1YwlwQ7Vg193Pse3ED6sOAhRr7ECTP0Uf327OCUHDngPlRcEf60aG
+# tKzxnijA+oMOa77EsmqFdfujw36TiPnLKmcpVfa4Q71asroi5hreWJcGYFkuR2Kg
+# RY1gT7dtuTow1ccipjN6/4Y40ZDwZTLpx53Ycczp/FaQeFT/aSUlCKWxgfDerTUZ
+# u4UdDwYdDbwH/fKMa5XCbD5g4JIGoZIYgqgTNW8OTPqA4S7GRwDuK2zuEHCf/gER
+# Lr0mMd+TuvI4HWDEXd5C3F8qgfVTMehCNC3XHjpSZ/LXzb36RwZR2pOpPcFIt0fQ
+# /Ecj3BevjfZSEoyrCFXYHhUMfR5yuwckTOsE1vvzmUhvM3LxvJzUQWhcdkWsyIgr
+# rfE7K8Iin3bE3M6VSMO9tSh1Z05FLh/NuFa/ejPASeiiAPUuPoIdYh6NXkM1IM1h
+# 4cj6tbTdxfG4eyc=
 # SIG # End signature block
