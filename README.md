@@ -47,6 +47,7 @@ Get-WEMApplication -SiteId 1
 ## Usage Examples
 
 - [Connecting to WEM](Docs/ConnectToWEMEnvironment.md)
+- [Import-IvantiWC](Docs/Import-IvantiWC.md)
 - [Create Applications And Assignment](Docs/CreateApplicationsAndAssignment.md)
 - [Create Network Drive And Assignment](Docs/CreateNetworkDriveAndAssignment.md)
 - [Create Printer Assignment](Docs/CreatePrinterAssignment.md)
