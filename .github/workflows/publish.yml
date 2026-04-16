@@ -1,0 +1,57 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  validate:
+    name: Validate
+    uses: ./.github/workflows/validate.yml
+
+  publish:
+    name: Publish to PSGallery
+    needs: validate
+    runs-on: windows-latest
+    environment: ${{ github.ref_name == 'main' && 'psgallery-prod' || 'psgallery-test' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install PowerShellGet
+        shell: pwsh
+        run: |
+          Install-Module -Name PowerShellGet -Force -SkipPublisherCheck -Scope CurrentUser -AllowClobber
+
+      - name: Register PSGallery Test repository
+        if: github.ref_name == 'dev'
+        shell: pwsh
+        run: |
+          Register-PSRepository `
+            -Name 'PSGalleryTest' `
+            -SourceLocation 'https://www.poshtestgallery.com/api/v2/' `
+            -PublishLocation 'https://www.poshtestgallery.com/api/v2/package/' `
+            -InstallationPolicy Trusted
+
+      - name: Publish to PSGallery Test (dev)
+        if: github.ref_name == 'dev'
+        shell: pwsh
+        run: |
+          Publish-Module `
+            -Path '.\JBC.CitrixWEM' `
+            -Repository 'PSGalleryTest' `
+            -NuGetApiKey '${{ secrets.NUGET_KEY_TEST }}' `
+            -Verbose
+
+      - name: Publish to PSGallery (main)
+        if: github.ref_name == 'main'
+        shell: pwsh
+        run: |
+          Publish-Module `
+            -Path '.\JBC.CitrixWEM' `
+            -Repository 'PSGallery' `
+            -NuGetApiKey '${{ secrets.NUGET_KEY_PROD }}' `
+            -Verbose
