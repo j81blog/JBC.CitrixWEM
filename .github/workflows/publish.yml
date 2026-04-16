@@ -40,18 +40,30 @@ jobs:
         if: github.ref_name == 'dev'
         shell: pwsh
         run: |
-          Publish-Module `
-            -Path '.\JBC.CitrixWEM' `
-            -Repository 'PSGalleryTest' `
-            -NuGetApiKey '${{ secrets.NUGET_KEY_TEST }}' `
-            -Verbose
+          $LocalVersion = (Import-PowerShellDataFile '.\JBC.CitrixWEM\JBC.CitrixWEM.psd1').ModuleVersion
+          $Published = Find-Module -Name 'JBC.CitrixWEM' -Repository 'PSGalleryTest' -ErrorAction SilentlyContinue
+          if ($Published -and $Published.Version -eq $LocalVersion) {
+            Write-Host "Version $LocalVersion is already published to PSGalleryTest - skipping."
+          } else {
+            Publish-Module `
+              -Path '.\JBC.CitrixWEM' `
+              -Repository 'PSGalleryTest' `
+              -NuGetApiKey '${{ secrets.NUGET_KEY_TEST }}' `
+              -Verbose
+          }
 
       - name: Publish to PSGallery (main)
         if: github.ref_name == 'main'
         shell: pwsh
         run: |
-          Publish-Module `
-            -Path '.\JBC.CitrixWEM' `
-            -Repository 'PSGallery' `
-            -NuGetApiKey '${{ secrets.NUGET_KEY_PROD }}' `
-            -Verbose
+          $LocalVersion = (Import-PowerShellDataFile '.\JBC.CitrixWEM\JBC.CitrixWEM.psd1').ModuleVersion
+          $Published = Find-Module -Name 'JBC.CitrixWEM' -Repository 'PSGallery' -ErrorAction SilentlyContinue
+          if ($Published -and $Published.Version -eq $LocalVersion) {
+            Write-Host "Version $LocalVersion is already published to PSGallery - skipping."
+          } else {
+            Publish-Module `
+              -Path '.\JBC.CitrixWEM' `
+              -Repository 'PSGallery' `
+              -NuGetApiKey '${{ secrets.NUGET_KEY_PROD }}' `
+              -Verbose
+          }
