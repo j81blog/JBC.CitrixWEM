@@ -1,0 +1,32 @@
+{
+    "items": [
+        {
+            "id": 1,
+            "name": "Default Site",
+            "description": "Default VUEM Site",
+            "properties": "",
+            "scopeUid": ""
+        },
+        {
+            "id": 3,
+            "name": "Customer Site 1",
+            "description": "Customer Site 1",
+            "properties": "",
+            "scopeUid": "992aea72-6699-4c3c-a64a-edad39add7bf"
+        },
+        {
+            "id": 4,
+            "name": "Customer Site 2",
+            "description": "Customer Site 2",
+            "properties": "",
+            "scopeUid": ""
+        },
+        {
+            "id": 7,
+            "name": "TestLAB",
+            "description": "Test Lab",
+            "properties": "",
+            "scopeUid": "4e5c7352-120f-4c0a-8728-32b75c3826aa"
+        }
+    ]
+}
