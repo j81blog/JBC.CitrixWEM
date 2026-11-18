@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Resource strings for AppVentiXTest.admx. Used by tests\IvantiWCPolicy.Tests.ps1. -->
+<policyDefinitionResources revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>AppVentiX test template</displayName>
+  <description>Synthetic template used by the AppVentiX module tests.</description>
+  <resources>
+    <stringTable>
+      <string id="SUPPORTED_AvxTest">AppVentiX Test 1.0 or later</string>
+      <string id="AvxTestCategory">AppVentiX Test</string>
+      <string id="AvxExpandablePath">Default file location</string>
+      <string id="AvxExpandablePathExplain">Sets the default file location.</string>
+      <string id="AvxPathList">List of paths</string>
+      <string id="AvxPathListExplain">Holds a list of paths.</string>
+      <string id="AvxDelay">Delay before saving</string>
+      <string id="AvxDelayExplain">Seconds of idle time before saving.</string>
+      <string id="AvxToggle">Enable the toggle</string>
+      <string id="AvxToggleExplain">Turns the toggle on or off.</string>
+      <string id="AvxMultiLine">Lines of text</string>
+      <string id="AvxMultiLineExplain">Accepts multiple lines of text.</string>
+      <string id="AvxFlags">Given name and flags</string>
+      <string id="AvxFlagsExplain">Sets the given name and how it is sourced.</string>
+      <string id="AvxFlagsNone">Not final</string>
+      <string id="AvxFlagsExternal">External backend</string>
+      <string id="AvxManagedList">List of managed add-ins</string>
+      <string id="AvxManagedListExplain">Controls which add-ins are managed.</string>
+      <string id="AvxSimpleSwitch">Simple switch</string>
+      <string id="AvxSimpleSwitchExplain">A policy-level switch with no elements.</string>
+    </stringTable>
+    <presentationTable />
+  </resources>
+</policyDefinitionResources>

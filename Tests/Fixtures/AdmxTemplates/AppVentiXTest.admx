@@ -1,0 +1,173 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic ADMX used by tests\IvantiWCPolicy.Tests.ps1. Not a real product template. -->
+<policyDefinitions revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="avxtest" namespace="AppVentiX.Policies.Test" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <supportedOn>
+    <definitions>
+      <definition name="SUPPORTED_AvxTest" displayName="$(string.SUPPORTED_AvxTest)" />
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="AvxTestCategory" displayName="$(string.AvxTestCategory)" />
+  </categories>
+  <policies>
+
+    <!-- Expandable text element: registry data arrives as hex(2) / REG_EXPAND_SZ -->
+    <policy name="AvxExpandablePath" class="User" displayName="$(string.AvxExpandablePath)"
+            explainText="$(string.AvxExpandablePathExplain)" key="Software\Policies\AppVentiXTest\Paths">
+      <parentCategory ref="AvxTestCategory" />
+      <supportedOn ref="SUPPORTED_AvxTest" />
+      <elements>
+        <text id="AvxPathValue" valueName="defaultpath" expandable="true" />
+        <text id="AvxPlainValue" valueName="plainpath" />
+        <text id="AvxQuotedValue" valueName="quoted" />
+      </elements>
+    </policy>
+
+    <!-- list element: values are numbered entries under a sub-key -->
+    <policy name="AvxPathList" class="User" displayName="$(string.AvxPathList)"
+            explainText="$(string.AvxPathListExplain)" key="Software\Policies\AppVentiXTest\PathList">
+      <parentCategory ref="AvxTestCategory" />
+      <supportedOn ref="SUPPORTED_AvxTest" />
+      <elements>
+        <list id="AvxPathListItems" />
+      </elements>
+    </policy>
+
+    <!-- Decimal spin box: must keep its number, not collapse to a boolean -->
+    <policy name="AvxDelay" class="User" displayName="$(string.AvxDelay)"
+            explainText="$(string.AvxDelayExplain)" key="Software\Policies\AppVentiXTest\Options">
+      <parentCategory ref="AvxTestCategory" />
+      <supportedOn ref="SUPPORTED_AvxTest" />
+      <elements>
+        <decimal id="AvxDelaySeconds" valueName="delayseconds" minValue="1" maxValue="600" />
+      </elements>
+    </policy>
+
+    <!-- Boolean with explicit decimal true/false: must stay a checkbox -->
+    <policy name="AvxToggle" class="User" displayName="$(string.AvxToggle)"
+            explainText="$(string.AvxToggleExplain)" key="Software\Policies\AppVentiXTest\Options">
+      <parentCategory ref="AvxTestCategory" />
+      <supportedOn ref="SUPPORTED_AvxTest" />
+      <elements>
+        <boolean id="AvxToggleOn" valueName="toggleon">
+          <trueValue>
+            <decimal value="1" />
+          </trueValue>
+          <falseValue>
+            <decimal value="0" />
+          </falseValue>
+        </boolean>
+      </elements>
+    </policy>
+
+    <!-- multiText element: registry data arrives as hex(7) / REG_MULTI_SZ -->
+    <policy name="AvxMultiLine" class="User" displayName="$(string.AvxMultiLine)"
+            explainText="$(string.AvxMultiLineExplain)" key="Software\Policies\AppVentiXTest\Options">
+      <parentCategory ref="AvxTestCategory" />
+      <supportedOn ref="SUPPORTED_AvxTest" />
+      <elements>
+        <multiText id="AvxLines" valueName="lines" />
+      </elements>
+    </policy>
+
+    <!-- enum whose items carry a valueList: Final/External are written under the same key
+         but have no element of their own -->
+    <policy name="AvxFlags" class="User" displayName="$(string.AvxFlags)"
+            explainText="$(string.AvxFlagsExplain)" key="Software\Policies\AppVentiXTest\Profile\givenname">
+      <parentCategory ref="AvxTestCategory" />
+      <supportedOn ref="SUPPORTED_AvxTest" />
+      <elements>
+        <text id="AvxFlagsValue" valueName="Value" />
+        <enum id="AvxFlagsMode" valueName="Dummy">
+          <item displayName="$(string.AvxFlagsNone)">
+            <value>
+              <decimal value="0" />
+            </value>
+            <valueList defaultKey="Software\Policies\AppVentiXTest\Profile\givenname">
+              <item valueName="Final">
+                <value>
+                  <decimal value="0" />
+                </value>
+              </item>
+              <item valueName="External">
+                <value>
+                  <decimal value="0" />
+                </value>
+              </item>
+              <item valueName="ExternalBackend">
+                <value>
+                  <delete />
+                </value>
+              </item>
+            </valueList>
+          </item>
+          <item displayName="$(string.AvxFlagsExternal)">
+            <value>
+              <decimal value="2" />
+            </value>
+            <valueList defaultKey="Software\Policies\AppVentiXTest\Profile\givenname">
+              <item valueName="Final">
+                <value>
+                  <decimal value="1" />
+                </value>
+              </item>
+              <item valueName="External">
+                <value>
+                  <decimal value="1" />
+                </value>
+              </item>
+              <item valueName="ExternalBackend">
+                <value>
+                  <string>com.appventix.test.Backend</string>
+                </value>
+              </item>
+            </valueList>
+          </item>
+        </enum>
+      </elements>
+    </policy>
+
+    <!-- enabledList/disabledList write a value under a key that has no element -->
+    <policy name="AvxManagedList" class="User" displayName="$(string.AvxManagedList)"
+            explainText="$(string.AvxManagedListExplain)" key="Software\Policies\AppVentiXTest\AddinList">
+      <parentCategory ref="AvxTestCategory" />
+      <supportedOn ref="SUPPORTED_AvxTest" />
+      <enabledList>
+        <item key="Software\Policies\AppVentiXTest\AddinList" valueName="policyon">
+          <value>
+            <decimal value="1" />
+          </value>
+        </item>
+      </enabledList>
+      <disabledList>
+        <item key="Software\Policies\AppVentiXTest\AddinList" valueName="policyon">
+          <value>
+            <delete />
+          </value>
+        </item>
+      </disabledList>
+      <elements>
+        <text id="AvxAddinName" valueName="addinname" />
+      </elements>
+    </policy>
+
+    <!-- Unrelated policy so unmatched registry values still have somewhere to not match -->
+    <policy name="AvxSimpleSwitch" class="User" displayName="$(string.AvxSimpleSwitch)"
+            explainText="$(string.AvxSimpleSwitchExplain)" key="Software\Policies\AppVentiXTest\Options"
+            valueName="simpleswitch">
+      <parentCategory ref="AvxTestCategory" />
+      <supportedOn ref="SUPPORTED_AvxTest" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+      <disabledValue>
+        <decimal value="0" />
+      </disabledValue>
+    </policy>
+
+  </policies>
+</policyDefinitions>

@@ -90,6 +90,49 @@ Describe 'PSScriptAnalyzer' {
     }
 }
 
+Describe 'File Encoding and Line Endings' {
+
+    BeforeDiscovery {
+        $allFiles = Get-ChildItem -Path "$PSScriptRoot\..\JBC.CitrixWEM" -Recurse -Include '*.ps1', '*.psm1', '*.psd1' -File
+        $EncodingTestCases = $allFiles | ForEach-Object {
+            @{ FileName = $_.Name; FilePath = $_.FullName }
+        }
+    }
+
+    It '<FileName> is UTF-8 with BOM' -TestCases $EncodingTestCases {
+        param($FileName, $FilePath)
+        $bytes = [System.IO.File]::ReadAllBytes($FilePath)
+        $bytes.Length | Should -BeGreaterOrEqual 3
+        ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) | Should -BeTrue
+    }
+
+    It '<FileName> uses CRLF line endings only' -TestCases $EncodingTestCases {
+        param($FileName, $FilePath)
+        $text = [System.IO.File]::ReadAllText($FilePath)
+        ([regex]::Matches($text, '(?<!\r)\n')).Count | Should -Be 0 -Because 'bare LF line endings break the Authenticode signature after a git checkout'
+        ([regex]::Matches($text, '\r(?!\n)')).Count | Should -Be 0 -Because 'bare CR line endings are not allowed'
+    }
+
+    It '<FileName> contains only ASCII characters' -TestCases $EncodingTestCases {
+        param($FileName, $FilePath)
+        $text = [System.IO.File]::ReadAllText($FilePath).TrimStart([char]0xFEFF)
+        $nonAscii = [regex]::Matches($text, '[^\x00-\x7F]') | ForEach-Object { 'U+{0:X4}' -f [int][char]$_.Value } | Sort-Object -Unique
+        $nonAscii | Should -BeNullOrEmpty -Because 'non-ASCII characters break on PS 5.1 without a BOM, use [char]0x.... instead'
+    }
+}
+
+Describe 'Git Attributes' {
+
+    It 'Marks PowerShell files as -text in .gitattributes' {
+        $attributesPath = "$PSScriptRoot\..\.gitattributes"
+        $attributesPath | Should -Exist
+        $content = Get-Content -Path $attributesPath
+        foreach ($extension in '*.ps1', '*.psm1', '*.psd1') {
+            $content | Where-Object { $_ -match "^\s*$([regex]::Escape($extension))\s+.*-text" } | Should -Not -BeNullOrEmpty -Because "$extension must not be converted by core.autocrlf"
+        }
+    }
+}
+
 Describe 'Authenticode Signatures' {
 
     BeforeDiscovery {

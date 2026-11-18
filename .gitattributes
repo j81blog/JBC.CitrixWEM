@@ -1,0 +1,5 @@
+# Signed PowerShell files must be stored byte for byte (UTF-8 BOM + CRLF).
+# Without -text, core.autocrlf rewrites line endings and breaks the Authenticode signatures.
+*.ps1  -text
+*.psm1 -text
+*.psd1 -text

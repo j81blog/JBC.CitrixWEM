@@ -420,3 +420,5 @@ FodyWeavers.xsd
 # Claude AI files
 .claude/
 Docs/superpowers/
+
+Temp/
